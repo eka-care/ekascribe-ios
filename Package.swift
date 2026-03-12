@@ -4,23 +4,35 @@
 import PackageDescription
 
 let package = Package(
-    name: "Scribe",
+    name: "EkaScribeSDK",
+    platforms: [.iOS(.v15), .macOS(.v12)],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
-        .library(
-            name: "Scribe",
-            targets: ["Scribe"]
-        ),
+        .library(name: "EkaScribeSDK", targets: ["EkaScribeSDK"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.24.0"),
+        .package(url: "https://github.com/aws-amplify/aws-sdk-ios-spm.git", from: "2.36.0"),
+        .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager.git", exact: "1.17.0"),
+        .package(url: "https://github.com/gfreezy/libfvad.git", from: "1.0.0"),
+        .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.9.0")
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "Scribe"
+            name: "EkaScribeSDK",
+            dependencies: [
+                .product(name: "GRDB", package: "GRDB.swift"),
+                .product(name: "AWSCore", package: "aws-sdk-ios-spm"),
+                .product(name: "AWSS3", package: "aws-sdk-ios-spm"),
+                .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
+                "libfvad",
+                "Alamofire"
+            ],
+            path: "Sources/EkaScribeSDK"
         ),
         .testTarget(
-            name: "ScribeTests",
-            dependencies: ["Scribe"]
-        ),
+            name: "EkaScribeSDKTests",
+            dependencies: ["EkaScribeSDK"],
+            path: "Tests/EkaScribeSDKTests"
+        )
     ]
 )
