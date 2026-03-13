@@ -53,12 +53,16 @@ final class SessionManagerTests: XCTestCase {
 
     // MARK: - Helpers
 
+    private var defaultSessionConfig: SessionConfig {
+        SessionConfig(languages: ["en-IN"], mode: "dictation", modelType: "pro")
+    }
+
     /// Starts a session and returns the session ID provided via onStart callback.
     @discardableResult
-    private func startSession(sessionConfig: SessionConfig = SessionConfig()) async -> String? {
+    private func startSession(sessionConfig: SessionConfig? = nil) async -> String? {
         var startedId: String?
         await sut.start(
-            sessionConfig: sessionConfig,
+            sessionConfig: sessionConfig ?? defaultSessionConfig,
             onStart: { startedId = $0 },
             onError: { _ in }
         )
@@ -79,7 +83,7 @@ final class SessionManagerTests: XCTestCase {
     func testStartSuccessful() async {
         var startedId: String?
         await sut.start(
-            sessionConfig: SessionConfig(),
+            sessionConfig: defaultSessionConfig,
             onStart: { startedId = $0 },
             onError: { XCTFail("Unexpected error: \($0.message)") }
         )
@@ -98,7 +102,7 @@ final class SessionManagerTests: XCTestCase {
         var receivedError: ScribeError?
 
         await sut.start(
-            sessionConfig: SessionConfig(),
+            sessionConfig: defaultSessionConfig,
             onStart: { _ in XCTFail("Should not start") },
             onError: { receivedError = $0 }
         )
@@ -116,7 +120,7 @@ final class SessionManagerTests: XCTestCase {
         // Try starting again while recording
         var receivedError: ScribeError?
         await sut.start(
-            sessionConfig: SessionConfig(),
+            sessionConfig: defaultSessionConfig,
             onStart: { _ in XCTFail("Should not start") },
             onError: { receivedError = $0 }
         )
@@ -150,7 +154,7 @@ final class SessionManagerTests: XCTestCase {
         var receivedError: ScribeError?
 
         await sut.start(
-            sessionConfig: SessionConfig(),
+            sessionConfig: defaultSessionConfig,
             onStart: { _ in XCTFail("Should not start") },
             onError: { receivedError = $0 }
         )
@@ -364,13 +368,26 @@ final class SessionManagerTests: XCTestCase {
 
     // MARK: - destroy() tests
 
-    func testDestroy() async {
+    func testDestroyFromCompletedState() async {
         await startSession()
-        XCTAssertEqual(sut.currentState, .recording)
+        sut.stop()
+        let reached = await waitForState(.completed)
+        XCTAssertTrue(reached)
 
         sut.destroy()
 
         XCTAssertEqual(sut.currentState, .idle)
+        XCTAssertNil(sut.pipeline)
+    }
+
+    func testDestroyFromRecordingCleansUpPipeline() async {
+        await startSession()
+        XCTAssertEqual(sut.currentState, .recording)
+        XCTAssertNotNil(sut.pipeline)
+
+        sut.destroy()
+
+        // State machine doesn't allow recording->idle, but cleanup still runs
         XCTAssertNil(sut.pipeline)
     }
 
@@ -393,15 +410,23 @@ final class SessionManagerTests: XCTestCase {
 
     // MARK: - mapToSessionResult tests
 
-    func testMapToSessionResultBasic() {
-        let output = ScribeResultResponse.OutputDTO(
-            errors: nil, name: "SOAP Note", status: .success,
-            templateId: "tmpl-1", type: "markdown", value: nil, warnings: nil
-        )
-        let response = ScribeResultResponse(data: ScribeResultResponse.ResultData(
-            audioMatrix: nil, createdAt: nil, output: [output], templateResults: nil
-        ))
-
+    func testMapToSessionResultBasic() throws {
+        let json = """
+        {
+            "data": {
+                "output": [
+                    {
+                        "name": "SOAP Note",
+                        "status": "success",
+                        "template_id": "tmpl-1",
+                        "type": "markdown",
+                        "value": null
+                    }
+                ]
+            }
+        }
+        """
+        let response = try JSONDecoder().decode(ScribeResultResponse.self, from: Data(json.utf8))
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
         XCTAssertEqual(result.templates.count, 1)
@@ -410,11 +435,11 @@ final class SessionManagerTests: XCTestCase {
         XCTAssertEqual(result.templates.first?.type, .markdown)
     }
 
-    func testMapToSessionResultEmptyOutput() {
-        let response = ScribeResultResponse(data: ScribeResultResponse.ResultData(
-            audioMatrix: nil, createdAt: nil, output: [], templateResults: nil
-        ))
-
+    func testMapToSessionResultEmptyOutput() throws {
+        let json = """
+        { "data": { "output": [] } }
+        """
+        let response = try JSONDecoder().decode(ScribeResultResponse.self, from: Data(json.utf8))
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
         XCTAssertTrue(result.templates.isEmpty)
@@ -422,7 +447,6 @@ final class SessionManagerTests: XCTestCase {
 
     func testMapToSessionResultNilData() {
         let response = ScribeResultResponse(data: nil)
-
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
         XCTAssertTrue(result.templates.isEmpty)

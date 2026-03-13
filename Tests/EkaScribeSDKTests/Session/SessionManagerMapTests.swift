@@ -3,6 +3,13 @@ import XCTest
 
 final class SessionManagerMapTests: XCTestCase {
 
+    // MARK: - Helpers
+
+    /// Decode a ScribeResultResponse from a JSON string.
+    private func decodeResponse(_ json: String) throws -> ScribeResultResponse {
+        try JSONDecoder().decode(ScribeResultResponse.self, from: Data(json.utf8))
+    }
+
     // MARK: - mapToSessionResult
 
     func testMapEmptyResponse() {
@@ -24,23 +31,19 @@ final class SessionManagerMapTests: XCTestCase {
         XCTAssertTrue(result.templates.isEmpty)
     }
 
-    func testMapSingleOutput() {
-        let output = ScribeResultResponse.OutputDTO(
-            errors: nil,
-            name: "SOAP Notes",
-            status: nil,
-            templateId: "t1",
-            type: "markdown",
-            value: "Some output",
-            warnings: nil
-        )
-        let data = ScribeResultResponse.ResultData(
-            audioMatrix: nil,
-            createdAt: nil,
-            output: [output],
-            templateResults: nil
-        )
-        let response = ScribeResultResponse(data: data)
+    func testMapSingleOutput() throws {
+        let response = try decodeResponse("""
+        {
+            "data": {
+                "output": [{
+                    "name": "SOAP Notes",
+                    "template_id": "t1",
+                    "type": "markdown",
+                    "value": "Some output"
+                }]
+            }
+        }
+        """)
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
         XCTAssertEqual(result.templates.count, 1)
@@ -52,26 +55,21 @@ final class SessionManagerMapTests: XCTestCase {
         XCTAssertTrue(result.templates[0].isEditable)
     }
 
-    func testMapBase64DecodedValue() {
+    func testMapBase64DecodedValue() throws {
         let plainText = "Hello, World!"
         let base64Value = Data(plainText.utf8).base64EncodedString()
 
-        let output = ScribeResultResponse.OutputDTO(
-            errors: nil,
-            name: "Notes",
-            status: nil,
-            templateId: nil,
-            type: "markdown",
-            value: base64Value,
-            warnings: nil
-        )
-        let data = ScribeResultResponse.ResultData(
-            audioMatrix: nil,
-            createdAt: nil,
-            output: [output],
-            templateResults: nil
-        )
-        let response = ScribeResultResponse(data: data)
+        let response = try decodeResponse("""
+        {
+            "data": {
+                "output": [{
+                    "name": "Notes",
+                    "type": "markdown",
+                    "value": "\(base64Value)"
+                }]
+            }
+        }
+        """)
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
         XCTAssertEqual(result.templates.count, 1)
@@ -79,47 +77,37 @@ final class SessionManagerMapTests: XCTestCase {
         XCTAssertEqual(section?.value, plainText)
     }
 
-    func testMapNonBase64Value() {
-        let output = ScribeResultResponse.OutputDTO(
-            errors: nil,
-            name: "Notes",
-            status: nil,
-            templateId: nil,
-            type: "markdown",
-            value: "Not base64!@#$",
-            warnings: nil
-        )
-        let data = ScribeResultResponse.ResultData(
-            audioMatrix: nil,
-            createdAt: nil,
-            output: [output],
-            templateResults: nil
-        )
-        let response = ScribeResultResponse(data: data)
+    func testMapNonBase64Value() throws {
+        let response = try decodeResponse("""
+        {
+            "data": {
+                "output": [{
+                    "name": "Notes",
+                    "type": "markdown",
+                    "value": "Not base64"
+                }]
+            }
+        }
+        """)
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
         // Non-base64 value should fall back to original value
         let section = result.templates[0].sections.first
-        XCTAssertEqual(section?.value, "Not base64!@#$")
+        XCTAssertEqual(section?.value, "Not base64")
     }
 
-    func testMapJsonType() {
-        let output = ScribeResultResponse.OutputDTO(
-            errors: nil,
-            name: "EMR",
-            status: nil,
-            templateId: nil,
-            type: "json",
-            value: "{}",
-            warnings: nil
-        )
-        let data = ScribeResultResponse.ResultData(
-            audioMatrix: nil,
-            createdAt: nil,
-            output: [output],
-            templateResults: nil
-        )
-        let response = ScribeResultResponse(data: data)
+    func testMapJsonType() throws {
+        let response = try decodeResponse("""
+        {
+            "data": {
+                "output": [{
+                    "name": "EMR",
+                    "type": "json",
+                    "value": "{}"
+                }]
+            }
+        }
+        """)
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
         XCTAssertEqual(result.templates[0].type, .json)
@@ -138,20 +126,17 @@ final class SessionManagerMapTests: XCTestCase {
         XCTAssertEqual(result.audioQuality, 0.85)
     }
 
-    func testMapMultipleOutputs() {
-        let output1 = ScribeResultResponse.OutputDTO(
-            errors: nil, name: "Template 1", status: nil, templateId: "t1",
-            type: "markdown", value: "val1", warnings: nil
-        )
-        let output2 = ScribeResultResponse.OutputDTO(
-            errors: nil, name: "Template 2", status: nil, templateId: "t2",
-            type: "json", value: "val2", warnings: nil
-        )
-        let data = ScribeResultResponse.ResultData(
-            audioMatrix: nil, createdAt: nil,
-            output: [output1, output2], templateResults: nil
-        )
-        let response = ScribeResultResponse(data: data)
+    func testMapMultipleOutputs() throws {
+        let response = try decodeResponse("""
+        {
+            "data": {
+                "output": [
+                    { "name": "Template 1", "template_id": "t1", "type": "markdown", "value": "val1" },
+                    { "name": "Template 2", "template_id": "t2", "type": "json", "value": "val2" }
+                ]
+            }
+        }
+        """)
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
         XCTAssertEqual(result.templates.count, 2)

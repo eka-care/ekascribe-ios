@@ -26,7 +26,7 @@ final class SmokeTests: XCTestCase {
 
     func testStartSessionThrowsWhenSDKNotInitialized() async {
         do {
-            try await EkaScribe.shared.startSession(config: SessionConfig())
+            try await EkaScribe.shared.startSession(config: SessionConfig(languages: ["en-IN"], mode: "dictation", modelType: "pro"))
             XCTFail("Expected startSession to throw when SDK is not initialized")
         } catch let error as ScribeError {
             XCTAssertEqual(error.code, .invalidConfig)

@@ -64,7 +64,7 @@ final class TransactionManagerFullTests: XCTestCase {
             statusCode: 200
         )
 
-        let result = await sut.initTransaction(sessionId: "s1", sessionConfig: SessionConfig(), folderName: "240101")
+        let result = await sut.initTransaction(sessionId: "s1", sessionConfig: SessionConfig(languages: ["en-IN"], mode: "dictation", modelType: "pro"), folderName: "240101")
 
         if case .success(_, let bid) = result {
             XCTAssertEqual(bid, "bid-123")
@@ -78,12 +78,12 @@ final class TransactionManagerFullTests: XCTestCase {
     func testInitTransactionServerError() async {
         let result = await sut.initTransaction(
             sessionId: "s1",
-            sessionConfig: SessionConfig(),
+            sessionConfig: SessionConfig(languages: ["en-IN"], mode: "dictation", modelType: "pro"),
             folderName: "240101"
         )
 
         apiService.initResult = .serverError(statusCode: 500, message: "Internal error")
-        let errorResult = await sut.initTransaction(sessionId: "s1", sessionConfig: SessionConfig(), folderName: "240101")
+        let errorResult = await sut.initTransaction(sessionId: "s1", sessionConfig: SessionConfig(languages: ["en-IN"], mode: "dictation", modelType: "pro"), folderName: "240101")
 
         if case .error(let msg) = errorResult {
             XCTAssertEqual(msg, "Internal error")
@@ -96,7 +96,7 @@ final class TransactionManagerFullTests: XCTestCase {
     func testInitTransactionNetworkError() async {
         apiService.initResult = .networkError(NSError(domain: "net", code: -1))
 
-        let result = await sut.initTransaction(sessionId: "s1", sessionConfig: SessionConfig(), folderName: "240101")
+        let result = await sut.initTransaction(sessionId: "s1", sessionConfig: SessionConfig(languages: ["en-IN"], mode: "dictation", modelType: "pro"), folderName: "240101")
 
         if case .error(let msg) = result {
             XCTAssertTrue(msg.hasPrefix("Network error:"))
@@ -161,18 +161,16 @@ final class TransactionManagerFullTests: XCTestCase {
 
     // MARK: - pollResult
 
+    private func decodeResponse(_ json: String) -> ScribeResultResponse {
+        try! JSONDecoder().decode(ScribeResultResponse.self, from: Data(json.utf8))
+    }
+
     func testPollResultImmediateSuccess() async {
         saveSession("s1", stage: TransactionStage.analyzing.rawValue)
-        let output = ScribeResultResponse.OutputDTO(
-            errors: nil, name: "test", status: .success,
-            templateId: nil, type: nil, value: nil, warnings: nil
-        )
-        apiService.getResultResult = .success(
-            ScribeResultResponse(data: ScribeResultResponse.ResultData(
-                audioMatrix: nil, createdAt: nil, output: [output], templateResults: nil
-            )),
-            statusCode: 200
-        )
+        let successResponse = decodeResponse("""
+        { "data": { "output": [{ "name": "test", "status": "success" }] } }
+        """)
+        apiService.getResultResult = .success(successResponse, statusCode: 200)
 
         let result = await sut.pollResult(sessionId: "s1")
 
@@ -185,16 +183,10 @@ final class TransactionManagerFullTests: XCTestCase {
 
     func testPollResultAllFailure() async {
         saveSession("s1", stage: TransactionStage.analyzing.rawValue)
-        let output = ScribeResultResponse.OutputDTO(
-            errors: nil, name: "test", status: .failure,
-            templateId: nil, type: nil, value: nil, warnings: nil
-        )
-        apiService.getResultResult = .success(
-            ScribeResultResponse(data: ScribeResultResponse.ResultData(
-                audioMatrix: nil, createdAt: nil, output: [output], templateResults: nil
-            )),
-            statusCode: 200
-        )
+        let failureResponse = decodeResponse("""
+        { "data": { "output": [{ "name": "test", "status": "failure" }] } }
+        """)
+        apiService.getResultResult = .success(failureResponse, statusCode: 200)
 
         let result = await sut.pollResult(sessionId: "s1")
 
@@ -224,10 +216,9 @@ final class TransactionManagerFullTests: XCTestCase {
     func testPollResult202ThenSuccess() async {
         saveSession("s1", stage: TransactionStage.analyzing.rawValue)
         var callCount = 0
-        let successOutput = ScribeResultResponse.OutputDTO(
-            errors: nil, name: "t", status: .success,
-            templateId: nil, type: nil, value: nil, warnings: nil
-        )
+        let successResponse = decodeResponse("""
+        { "data": { "output": [{ "name": "t", "status": "success" }] } }
+        """)
 
         // We need to return 202 first, then 200 with success
         // Since MockScribeAPIService returns the same result each time,
@@ -235,9 +226,7 @@ final class TransactionManagerFullTests: XCTestCase {
         let mockAPI = SequentialMockAPI()
         mockAPI.results = [
             .success(ScribeResultResponse(data: nil), statusCode: 202),
-            .success(ScribeResultResponse(data: ScribeResultResponse.ResultData(
-                audioMatrix: nil, createdAt: nil, output: [successOutput], templateResults: nil
-            )), statusCode: 200)
+            .success(successResponse, statusCode: 200)
         ]
 
         let txnManager = TransactionManager(
@@ -292,6 +281,7 @@ final class TransactionManagerFullTests: XCTestCase {
     func testRetrySuccessfulRetry() async {
         saveSession("s1")
         // Create a real temp file for the chunk
+        try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
         let tempFile = outputDir.appendingPathComponent("chunk.m4a")
         FileManager.default.createFile(atPath: tempFile.path, contents: Data([0x01]))
         saveChunk("c1", sessionId: "s1", index: 0, state: UploadState.failed.rawValue, filePath: tempFile.path)
@@ -353,7 +343,7 @@ final class TransactionManagerFullTests: XCTestCase {
         // After init succeeds, it recurses to STOP stage -> needs retryFailedUploads + stopTransaction
         // which needs chunks to be uploaded and stopTransaction to succeed
         // For simplicity, just check that initTransaction is called
-        let result = await sut.checkAndProgress(sessionId: "s1", sessionConfig: SessionConfig())
+        let result = await sut.checkAndProgress(sessionId: "s1", sessionConfig: SessionConfig(languages: ["en-IN"], mode: "dictation", modelType: "pro"))
 
         XCTAssertEqual(apiService.initCallCount, 1)
         // Result depends on recursion but init was called

@@ -202,7 +202,7 @@ final class VadAudioChunkerTests: XCTestCase {
 
         if let chunk = chunks.first {
             XCTAssertNotNil(chunk.quality)
-            XCTAssertEqual(chunk.quality?.overallScore, 0.85, accuracy: 0.001)
+            XCTAssertEqual(Double(chunk.quality?.overallScore ?? 0), 0.85, accuracy: 0.001)
         } else if let flushed = chunker.flush() {
             XCTAssertNotNil(flushed.quality)
         }

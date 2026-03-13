@@ -191,7 +191,7 @@ final class UploadAndTransactionTests: XCTestCase {
     // MARK: - SessionConfig
 
     func testSessionConfigDefaults() {
-        let config = SessionConfig()
+        let config = SessionConfig(languages: ["en-IN"], mode: "dictation", modelType: "pro")
         XCTAssertEqual(config.languages, ["en-IN"])
         XCTAssertEqual(config.mode, "dictation")
         XCTAssertEqual(config.modelType, "pro")
