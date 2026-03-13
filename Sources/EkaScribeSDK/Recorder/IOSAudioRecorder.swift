@@ -202,7 +202,7 @@ final class IOSAudioRecorder: AudioRecorder {
 
             switch reason {
             case .oldDeviceUnavailable, .newDeviceAvailable:
-                self.handleRouteChange()
+                handleRouteChange()
             default:
                 break
             }

@@ -146,7 +146,7 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
     private func startChunkingTask() {
         chunkingTask = Task { [weak self] in
             guard let self else { return }
-            for await frame in frameStream {
+            for await frame in self.frameStream {
                 // Stream PCM to disk instead of accumulating in memory
                 if let handle = self.rawPcmFileHandle {
                     self.recordedSampleRate = frame.sampleRate
@@ -155,16 +155,16 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
                         handle.write(data)
                     }
                 }
-                analyser.submitFrame(frame)
-                if let chunk = chunker.feed(frame) {
-                    chunkContinuation.yield(chunk)
+                self.analyser.submitFrame(frame)
+                if let chunk = self.chunker.feed(frame) {
+                    self.chunkContinuation.yield(chunk)
                 }
             }
 
-            if let lastChunk = chunker.flush() {
-                chunkContinuation.yield(lastChunk)
+            if let lastChunk = self.chunker.flush() {
+                self.chunkContinuation.yield(lastChunk)
             }
-            chunkContinuation.finish()
+            self.chunkContinuation.finish()
         }
     }
 
@@ -191,11 +191,11 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
                         uploadState: UploadState.pending.rawValue,
                         retryCount: 0,
                         qualityScore: chunk.quality?.overallScore,
-                        createdAt: timeProvider.nowMillis()
+                        createdAt: self.timeProvider.nowMillis()
                     )
 
-                    try await dataManager.saveChunk(entity)
-                    try await dataManager.markInProgress(chunk.chunkId)
+                    try await self.dataManager.saveChunk(entity)
+                    try await self.dataManager.markInProgress(chunk.chunkId)
 
                     let file = URL(fileURLWithPath: encoded.filePath)
                     let metadata = UploadMetadata(
@@ -203,30 +203,30 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
                         sessionId: chunk.sessionId,
                         chunkIndex: chunk.index,
                         fileName: fileName,
-                        folderName: folderName,
-                        bid: bid,
+                        folderName: self.folderName,
+                        bid: self.bid,
                         mimeType: encoded.format.mimeType
                     )
 
-                    switch await chunkUploader.upload(file: file, metadata: metadata) {
+                    switch await self.chunkUploader.upload(file: file, metadata: metadata) {
                     case .success:
-                        try await dataManager.markUploaded(chunk.chunkId)
-                        deleteFile(file, logger: logger)
-                        onEvent?(.chunkUploaded, .success, "Chunk uploaded", [
+                        try await self.dataManager.markUploaded(chunk.chunkId)
+                        deleteFile(file, logger: self.logger)
+                        self.onEvent?(.chunkUploaded, .success, "Chunk uploaded", [
                             "chunkId": chunk.chunkId,
                             "chunkIndex": "\(chunk.index)"
                         ])
 
                     case .failure(let error, _):
-                        try await dataManager.markFailed(chunk.chunkId)
-                        onEvent?(.chunkUploadFailed, .error, "Chunk upload failed: \(error)", [
+                        try await self.dataManager.markFailed(chunk.chunkId)
+                        self.onEvent?(.chunkUploadFailed, .error, "Chunk upload failed: \(error)", [
                             "chunkId": chunk.chunkId,
                             "error": error
                         ])
                     }
                 } catch {
-                    logger.error("Pipeline", "Failed to process chunk: \(chunk.chunkId)", error)
-                    onEvent?(.chunkProcessingFailed, .error, "Chunk processing failed: \(error.localizedDescription)", [
+                    self.logger.error("Pipeline", "Failed to process chunk: \(chunk.chunkId)", error)
+                    self.onEvent?(.chunkProcessingFailed, .error, "Chunk processing failed: \(error.localizedDescription)", [
                         "chunkId": chunk.chunkId
                     ])
                 }

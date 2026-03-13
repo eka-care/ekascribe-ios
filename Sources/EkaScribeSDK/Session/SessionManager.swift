@@ -170,16 +170,16 @@ final class SessionManager: @unchecked Sendable {
                 cleanup()
             }
 
-            let fullAudioResult = await pipeline?.stop()
-            let chunkCount = (try? await dataManager.getChunkCount(sessionId: sessionId)) ?? 0
-            eventEmitter?.emit(.pipelineStopped, .info, "Pipeline stopped")
-            delegate?.scribe(EkaScribe.shared, didStopSession: sessionId, chunkCount: chunkCount)
+            let fullAudioResult = await self.pipeline?.stop()
+            let chunkCount = (try? await self.dataManager.getChunkCount(sessionId: sessionId)) ?? 0
+            self.eventEmitter?.emit(.pipelineStopped, .info, "Pipeline stopped")
+            self.delegate?.scribe(EkaScribe.shared, didStopSession: sessionId, chunkCount: chunkCount)
 
-            transition(to: .processing)
+            self.transition(to: .processing)
 
-            eventEmitter?.emit(.uploadRetryStarted, .info, "Retrying uploads")
-            let allUploaded = await transactionManager.retryFailedUploads(sessionId: sessionId)
-            eventEmitter?.emit(
+            self.eventEmitter?.emit(.uploadRetryStarted, .info, "Retrying uploads")
+            let allUploaded = await self.transactionManager.retryFailedUploads(sessionId: sessionId)
+            self.eventEmitter?.emit(
                 .uploadRetryCompleted,
                 allUploaded ? .success : .error,
                 "Upload retry \(allUploaded ? "success" : "partial")"
@@ -190,7 +190,7 @@ final class SessionManager: @unchecked Sendable {
                 return
             }
 
-            let stopResult = await transactionManager.stopTransaction(sessionId: sessionId)
+            let stopResult = await self.transactionManager.stopTransaction(sessionId: sessionId)
             guard case .success = stopResult else {
                 let message: String
                 if case .error(let errorMessage) = stopResult {
@@ -198,12 +198,12 @@ final class SessionManager: @unchecked Sendable {
                 } else {
                     message = "Stop failed"
                 }
-                handleError(sessionId: sessionId, code: .stopTransactionFailed, message: message)
+                self.handleError(sessionId: sessionId, code: .stopTransactionFailed, message: message)
                 return
             }
-            eventEmitter?.emit(.stopTransactionSuccess, .success, "Stop transaction success")
+            self.eventEmitter?.emit(.stopTransactionSuccess, .success, "Stop transaction success")
 
-            let commitResult = await transactionManager.commitTransaction(sessionId: sessionId)
+            let commitResult = await self.transactionManager.commitTransaction(sessionId: sessionId)
             guard case .success = commitResult else {
                 let message: String
                 if case .error(let errorMessage) = commitResult {
@@ -214,28 +214,29 @@ final class SessionManager: @unchecked Sendable {
                 self.handleError(sessionId: sessionId, code: .commitTransactionFailed, message: message)
                 return
             }
-            eventEmitter?.emit(.commitTransactionSuccess, .success, "Commit transaction success")
+            self.eventEmitter?.emit(.commitTransactionSuccess, .success, "Commit transaction success")
 
-            switch await transactionManager.pollResult(sessionId: sessionId) {
+            switch await self.transactionManager.pollResult(sessionId: sessionId) {
             case .success(let response):
-                try? await dataManager.updateSessionState(sessionId, SessionState.completed.rawValue)
-                transition(to: .completed)
+                try? await self.dataManager.updateSessionState(sessionId, SessionState.completed.rawValue)
+                self.transition(to: .completed)
                 let result = Self.mapToSessionResult(sessionId: sessionId, response)
-                eventEmitter?.emit(.sessionCompleted, .success, "Session completed")
-                delegate?.scribe(EkaScribe.shared, didCompleteSession: sessionId, result: result)
+                self.eventEmitter?.emit(.sessionCompleted, .success, "Session completed")
+                self.delegate?.scribe(EkaScribe.shared, didCompleteSession: sessionId, result: result)
 
             case .failed(let error):
-                handleError(sessionId: sessionId, code: .transcriptionFailed, message: error)
+                self.handleError(sessionId: sessionId, code: .transcriptionFailed, message: error)
 
             case .timeout:
-                transition(to: .completed)
-                eventEmitter?.emit(.pollResultTimeout, .info, "Poll timeout")
+                self.transition(to: .completed)
+                self.eventEmitter?.emit(.pollResultTimeout, .info, "Poll timeout")
             }
 
             if let fullAudioResult {
-                lastFullAudioPath = fullAudioResult.filePath
+                self.lastFullAudioPath = fullAudioResult.filePath
                 Task { [weak self] in
-                    await self?.uploadFullAudio(fullAudioResult)
+                    guard let self else { return }
+                    await self.uploadFullAudio(fullAudioResult)
                 }
             }
         }

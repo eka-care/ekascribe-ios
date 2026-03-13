@@ -85,6 +85,7 @@ final class S3ChunkUploader: ChunkUploader, @unchecked Sendable {
             let expression = AWSS3TransferUtilityUploadExpression()
             expression.setValue(metadata.bid, forRequestHeader: "x-amz-meta-bid")
             expression.setValue(metadata.sessionId, forRequestHeader: "x-amz-meta-txnid")
+            let bucketName = bucketName
 
             let result: UploadResult = await withCheckedContinuation { continuation in
                 // Ensure continuation is only resumed once
@@ -92,7 +93,7 @@ final class S3ChunkUploader: ChunkUploader, @unchecked Sendable {
                 
                 transferUtility.uploadFile(
                     file,
-                    bucket: self.bucketName,
+                    bucket: bucketName,
                     key: key,
                     contentType: metadata.mimeType,
                     expression: expression,
@@ -104,7 +105,7 @@ final class S3ChunkUploader: ChunkUploader, @unchecked Sendable {
                                     isRetryable: true
                                 ))
                             } else {
-                                let url = "s3://\(self.bucketName)/\(key)"
+                                let url = "s3://\(bucketName)/\(key)"
                                 continuation.resume(returning: .success(url: url))
                             }
                         }

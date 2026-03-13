@@ -108,7 +108,8 @@ public final class EkaScribe: @unchecked Sendable {
 
         downloader.$state
             .sink { [weak self] state in
-                self?.analyserState = state
+                guard let self else { return }
+                analyserState = state
             }
             .store(in: &cancellables)
 
@@ -123,8 +124,9 @@ public final class EkaScribe: @unchecked Sendable {
         config: SessionConfig,
         onStart: @escaping (String) -> Void = { _ in },
         onError: @escaping (ScribeError) -> Void = { _ in }
-    ) async {
-        await requireInitialized().start(sessionConfig: config, onStart: onStart, onError: onError)
+    ) async throws {
+        let manager = try requireInitialized()
+        await manager.start(sessionConfig: config, onStart: onStart, onError: onError)
     }
 
     public func pauseSession() {
@@ -143,20 +145,24 @@ public final class EkaScribe: @unchecked Sendable {
         sessionManager?.currentState == .recording
     }
 
-    public func getSessionState() -> AnyPublisher<SessionState, Never> {
-        requireInitialized().stateFlow
+    public func getSessionState() throws -> AnyPublisher<SessionState, Never> {
+        let manager = try requireInitialized()
+        return manager.stateFlow
     }
 
-    public func getAudioQuality() -> AnyPublisher<AudioQualityMetrics, Never> {
-        requireInitialized().audioQualityFlow
+    public func getAudioQuality() throws -> AnyPublisher<AudioQualityMetrics, Never> {
+        let manager = try requireInitialized()
+        return manager.audioQualityFlow
     }
 
-    public func getVoiceActivity() -> AnyPublisher<VoiceActivityData, Never> {
-        requireInitialized().voiceActivityFlow
+    public func getVoiceActivity() throws -> AnyPublisher<VoiceActivityData, Never> {
+        let manager = try requireInitialized()
+        return manager.voiceActivityFlow
     }
 
-    public func getUploadProgress(sessionId: String) -> AnyPublisher<UploadStage?, Never> {
-        requireDM().observeSession(sessionId)
+    public func getUploadProgress(sessionId: String) throws -> AnyPublisher<UploadStage?, Never> {
+        let dataManager = try requireDM()
+        return dataManager.observeSession(sessionId)
             .map { record in
                 guard let stage = record?.uploadStage else { return nil }
                 return UploadStage(rawValue: stage)
@@ -165,21 +171,31 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func getSessions() async throws -> [ScribeSession] {
-        let sessions = try await requireDM().getAllSessions()
+        let dataManager = try requireDM()
+        let sessions = try await dataManager.getAllSessions()
         return sessions.compactMap(Self.mapSession)
     }
 
     public func getSession(_ sessionId: String) async throws -> ScribeSession? {
-        let session = try await requireDM().getSession(sessionId)
+        let dataManager = try requireDM()
+        let session = try await dataManager.getSession(sessionId)
         return session.flatMap(Self.mapSession)
     }
 
-    public func retrySession(_ sessionId: String, forceCommit: Bool = false) async -> TransactionResult {
-        await requireTxnManager().checkAndProgress(sessionId: sessionId, force: forceCommit)
+    public func retrySession(_ sessionId: String, forceCommit: Bool = false) async throws -> TransactionResult {
+        let transactionManager = try requireTxnManager()
+        return await transactionManager.checkAndProgress(sessionId: sessionId, force: forceCommit)
     }
 
     public func getSessionOutput(_ sessionId: String) async -> Result<SessionResult, Error> {
-        switch await requireAPI().getTransactionResult(sessionId) {
+        let apiService: ScribeAPIService
+        do {
+            apiService = try requireAPI()
+        } catch {
+            return .failure(error)
+        }
+
+        switch await apiService.getTransactionResult(sessionId) {
         case .success(let response, _):
             return .success(SessionManager.mapToSessionResult(sessionId: sessionId, response))
         case .serverError(_, let message):
@@ -190,6 +206,12 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func pollSessionResult(_ sessionId: String) async -> Result<SessionResult, Error> {
+        do {
+            _ = try requireAPI()
+        } catch {
+            return .failure(error)
+        }
+
         guard let config else {
             return .failure(ScribeException(code: .invalidConfig, message: "SDK config unavailable"))
         }
@@ -208,7 +230,14 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func convertTransactionResult(_ sessionId: String, templateId: String) async -> Result<Bool, Error> {
-        switch await requireAPI().convertTransactionResult(sessionId, templateId: templateId) {
+        let apiService: ScribeAPIService
+        do {
+            apiService = try requireAPI()
+        } catch {
+            return .failure(error)
+        }
+
+        switch await apiService.convertTransactionResult(sessionId, templateId: templateId) {
         case .success:
             return .success(true)
         case .serverError(_, let message):
@@ -219,8 +248,15 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func updateSessionResult(_ sessionId: String, updatedData: [SessionData]) async -> Result<Bool, Error> {
+        let apiService: ScribeAPIService
+        do {
+            apiService = try requireAPI()
+        } catch {
+            return .failure(error)
+        }
+
         let request = updatedData.map { UpdateSessionRequestItem(data: $0.data, templateId: $0.templateId) }
-        switch await requireAPI().updateSession(sessionId, request) {
+        switch await apiService.updateSession(sessionId, request) {
         case .success:
             return .success(true)
         case .serverError(_, let message):
@@ -231,7 +267,14 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func getTemplates() async -> Result<[TemplateItem], Error> {
-        switch await requireAPI().getTemplates() {
+        let apiService: ScribeAPIService
+        do {
+            apiService = try requireAPI()
+        } catch {
+            return .failure(error)
+        }
+
+        switch await apiService.getTemplates() {
         case .success(let response, _):
             let items = response.data?.templates?.compactMap { dto -> TemplateItem? in
                 guard let id = dto.id, let title = dto.title else { return nil }
@@ -255,8 +298,15 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func updateTemplates(favouriteTemplates: [String]) async -> Result<Void, Error> {
+        let apiService: ScribeAPIService
+        do {
+            apiService = try requireAPI()
+        } catch {
+            return .failure(error)
+        }
+
         let request = UpdateTemplatesRequest(data: .init(myTemplates: favouriteTemplates))
-        switch await requireAPI().updateTemplates(request) {
+        switch await apiService.updateTemplates(request) {
         case .success:
             return .success(())
         case .serverError(_, let message):
@@ -267,7 +317,14 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func getUserConfigs() async -> Result<UserConfigs, Error> {
-        switch await requireAPI().getUserConfig() {
+        let apiService: ScribeAPIService
+        do {
+            apiService = try requireAPI()
+        } catch {
+            return .failure(error)
+        }
+
+        switch await apiService.getUserConfig() {
         case .success(let response, _):
             guard let config = mapUserConfigs(response) else {
                 return .failure(ScribeException(code: .unknown, message: "Invalid user config payload"))
@@ -283,6 +340,13 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func updateUserConfigs(_ prefs: SelectedUserPreferences) async -> Result<Bool, Error> {
+        let apiService: ScribeAPIService
+        do {
+            apiService = try requireAPI()
+        } catch {
+            return .failure(error)
+        }
+
         let request = UpdateUserConfigRequest(
             data: .init(
                 consultationMode: prefs.consultationMode?.id,
@@ -292,7 +356,7 @@ public final class EkaScribe: @unchecked Sendable {
             )
         )
 
-        switch await requireAPI().updateUserConfig(request) {
+        switch await apiService.updateUserConfig(request) {
         case .success:
             return .success(true)
         case .serverError(_, let message):
@@ -302,8 +366,9 @@ public final class EkaScribe: @unchecked Sendable {
         }
     }
 
-    public func getHistory(count: Int? = nil) async -> [ScribeHistoryItem] {
-        switch await requireAPI().getHistory(count: count) {
+    public func getHistory(count: Int? = nil) async throws -> [ScribeHistoryItem] {
+        let apiService = try requireAPI()
+        switch await apiService.getHistory(count: count) {
         case .success(let response, _):
             return response.data?.map { item in
                 ScribeHistoryItem(
@@ -354,32 +419,39 @@ public final class EkaScribe: @unchecked Sendable {
         cancellables.removeAll()
     }
 
-    private func requireInitialized() -> SessionManager {
+    private func requireInitialized() throws -> SessionManager {
         guard isInitialized, let manager = sessionManager else {
-            fatalError("EkaScribe SDK not initialized. Call initialize() first.")
+            throw notInitializedError()
         }
         return manager
     }
 
-    private func requireDM() -> DataManager {
+    private func requireDM() throws -> DataManager {
         guard isInitialized, let dataManager else {
-            fatalError("EkaScribe SDK not initialized. Call initialize() first.")
+            throw notInitializedError()
         }
         return dataManager
     }
 
-    private func requireTxnManager() -> TransactionManager {
+    private func requireTxnManager() throws -> TransactionManager {
         guard isInitialized, let transactionManager else {
-            fatalError("EkaScribe SDK not initialized. Call initialize() first.")
+            throw notInitializedError()
         }
         return transactionManager
     }
 
-    private func requireAPI() -> ScribeAPIService {
+    private func requireAPI() throws -> ScribeAPIService {
         guard isInitialized, let apiService else {
-            fatalError("EkaScribe SDK not initialized. Call initialize() first.")
+            throw notInitializedError()
         }
         return apiService
+    }
+
+    private func notInitializedError() -> ScribeError {
+        ScribeError(
+            code: .invalidConfig,
+            message: "EkaScribe SDK not initialized. Call initialize() first."
+        )
     }
 
     private static func mapSession(_ session: SessionRecord) -> ScribeSession? {
