@@ -6,7 +6,7 @@ public struct SessionEvent: Sendable {
     public let eventType: EventType
     public let message: String
     public var metadata: [String: String]
-    public let timestampMs: Int64
+    public let timestampMs: Int
 
     public init(
         sessionId: String,
@@ -14,7 +14,7 @@ public struct SessionEvent: Sendable {
         eventType: EventType,
         message: String,
         metadata: [String: String] = [:],
-        timestampMs: Int64
+        timestampMs: Int
     ) {
         self.sessionId = sessionId
         self.eventName = eventName

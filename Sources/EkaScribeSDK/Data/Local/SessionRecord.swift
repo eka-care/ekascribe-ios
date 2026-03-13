@@ -5,8 +5,8 @@ struct SessionRecord: Codable, FetchableRecord, MutablePersistableRecord {
     static let databaseTableName = "scribe_session"
 
     var sessionId: String
-    var createdAt: Int64
-    var updatedAt: Int64
+    var createdAt: Int
+    var updatedAt: Int
     var state: String
     var chunkCount: Int = 0
     var mode: String?

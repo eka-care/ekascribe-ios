@@ -3,10 +3,10 @@ import Foundation
 
 final class SquimAudioAnalyser: AudioAnalyser, @unchecked Sendable {
     private let modelProvider: SquimModelProvider
-    private let analysisDurationMs: Int64 = 3000
+    private let analysisDurationMs: Int = 3000
     private let logger: Logger
     private var accumulatedFrames: [AudioFrame] = []
-    private var lastAnalysisTime: Int64 = 0
+    private var lastAnalysisTime: Int = 0
     private let qualitySubject = PassthroughSubject<AudioQuality, Never>()
     private let lock = NSLock()
 

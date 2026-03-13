@@ -1,7 +1,7 @@
 import Alamofire
 import Foundation
 
-final class ScribeAPIService {
+final class ScribeAPIService: ScribeAPIServiceProtocol {
     private let session: Session
     private let baseURL: String
     private let logger: Logger

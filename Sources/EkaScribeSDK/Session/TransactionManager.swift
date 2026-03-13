@@ -1,7 +1,7 @@
 import Foundation
 
-final class TransactionManager {
-    private let apiService: ScribeAPIService
+final class TransactionManager: TransactionManaging {
+    private let apiService: ScribeAPIServiceProtocol
     private let dataManager: DataManager
     private let chunkUploader: ChunkUploader
     private let bucketName: String
@@ -11,7 +11,7 @@ final class TransactionManager {
     private let logger: Logger
 
     init(
-        apiService: ScribeAPIService,
+        apiService: ScribeAPIServiceProtocol,
         dataManager: DataManager,
         chunkUploader: ChunkUploader,
         bucketName: String,

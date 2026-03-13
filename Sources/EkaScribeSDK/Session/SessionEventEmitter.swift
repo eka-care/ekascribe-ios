@@ -18,7 +18,7 @@ final class SessionEventEmitter {
             eventType: eventType,
             message: message,
             metadata: metadata,
-            timestampMs: Int64(Date().timeIntervalSince1970 * 1000)
+            timestampMs: Int(Date().timeIntervalSince1970 * 1000)
         )
         delegate?.scribe(scribe, didEmitEvent: event)
     }

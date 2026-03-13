@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-final class Pipeline: @unchecked Sendable {
+final class Pipeline: PipelineProtocol, @unchecked Sendable {
     private var recorder: AudioRecorder
     private let preBuffer: PreBuffer
     private let frameProducer: FrameProducer
@@ -248,7 +248,7 @@ final class Pipeline: @unchecked Sendable {
 
         // Check raw PCM file is not empty
         let pcmAttrs = try? FileManager.default.attributesOfItem(atPath: rawPcmFilePath)
-        let pcmSize = (pcmAttrs?[.size] as? Int64) ?? 0
+        let pcmSize = (pcmAttrs?[.size] as? Int) ?? 0
         guard pcmSize > 0 else {
             try? FileManager.default.removeItem(atPath: rawPcmFilePath)
             return nil
@@ -292,7 +292,7 @@ final class Pipeline: @unchecked Sendable {
 }
 
 extension Pipeline {
-    final class Factory {
+    final class Factory: PipelineCreating {
         private let config: EkaScribeConfig
         private let dataManager: DataManager
         private let encoder: AudioEncoder
@@ -327,7 +327,7 @@ extension Pipeline {
             folderName: String,
             bid: String,
             onEvent: ((SessionEventName, EventType, String, [String: String]) -> Void)? = nil
-        ) -> Pipeline {
+        ) -> PipelineProtocol {
             let pipelineConfig = PipelineConfig(enableAnalyser: config.enableAnalyser)
             let recorderConfig = RecorderConfig(sampleRate: config.sampleRate, frameSize: config.frameSize)
             let recorder = IOSAudioRecorder(config: recorderConfig, logger: logger)

@@ -1,12 +1,11 @@
-import AVFoundation
 import Combine
 import Foundation
 
 final class SessionManager: @unchecked Sendable {
     private let config: EkaScribeConfig
     private let dataManager: DataManager
-    private let pipelineFactory: Pipeline.Factory
-    private let transactionManager: TransactionManager
+    private let pipelineFactory: PipelineCreating
+    private let transactionManager: TransactionManaging
     private let chunkUploader: ChunkUploader
     private let timeProvider: TimeProvider
     private let logger: Logger
@@ -23,21 +22,23 @@ final class SessionManager: @unchecked Sendable {
 
     private var activeSessionId: String?
     private var activeSessionConfig: SessionConfig?
-    private(set) var pipeline: Pipeline?
+    private(set) var pipeline: PipelineProtocol?
     private weak var delegate: EkaScribeDelegate?
     private var eventEmitter: SessionEventEmitter?
     private var stopTask: Task<Void, Never>?
     private var flowCancellables: Set<AnyCancellable> = []
     private(set) var lastFullAudioPath: String?
+    private let micPermissionChecker: MicPermissionChecker
 
     init(
         config: EkaScribeConfig,
         dataManager: DataManager,
-        pipelineFactory: Pipeline.Factory,
-        transactionManager: TransactionManager,
+        pipelineFactory: PipelineCreating,
+        transactionManager: TransactionManaging,
         chunkUploader: ChunkUploader,
         timeProvider: TimeProvider,
-        logger: Logger
+        logger: Logger,
+        micPermissionChecker: MicPermissionChecker = DefaultMicPermissionChecker()
     ) {
         self.config = config
         self.dataManager = dataManager
@@ -46,6 +47,7 @@ final class SessionManager: @unchecked Sendable {
         self.chunkUploader = chunkUploader
         self.timeProvider = timeProvider
         self.logger = logger
+        self.micPermissionChecker = micPermissionChecker
     }
 
     func setDelegate(_ delegate: EkaScribeDelegate) {
@@ -57,7 +59,7 @@ final class SessionManager: @unchecked Sendable {
         onStart: (String) -> Void,
         onError: (ScribeError) -> Void
     ) async {
-        guard await checkMicPermission() else {
+        guard await micPermissionChecker.checkMicPermission() else {
             onError(ScribeError(code: .micPermissionDenied, message: "Microphone permission denied"))
             return
         }
@@ -157,6 +159,7 @@ final class SessionManager: @unchecked Sendable {
     }
 
     func stop() {
+        // TODO :- Here as well throw error if not successful stop
         guard [.recording, .paused].contains(currentState) else { return }
         transition(to: .stopping)
         eventEmitter?.emit(.sessionStopInitiated, .info, "Session stop initiated")
@@ -164,19 +167,19 @@ final class SessionManager: @unchecked Sendable {
         stopTask = Task { [weak self] in
             guard let self, let sessionId = self.activeSessionId else { return }
             defer {
-                self.cleanup()
+                cleanup()
             }
 
-            let fullAudioResult = await self.pipeline?.stop()
-            let chunkCount = (try? await self.dataManager.getChunkCount(sessionId: sessionId)) ?? 0
-            self.eventEmitter?.emit(.pipelineStopped, .info, "Pipeline stopped")
-            self.delegate?.scribe(EkaScribe.shared, didStopSession: sessionId, chunkCount: chunkCount)
+            let fullAudioResult = await pipeline?.stop()
+            let chunkCount = (try? await dataManager.getChunkCount(sessionId: sessionId)) ?? 0
+            eventEmitter?.emit(.pipelineStopped, .info, "Pipeline stopped")
+            delegate?.scribe(EkaScribe.shared, didStopSession: sessionId, chunkCount: chunkCount)
 
-            self.transition(to: .processing)
+            transition(to: .processing)
 
-            self.eventEmitter?.emit(.uploadRetryStarted, .info, "Retrying uploads")
-            let allUploaded = await self.transactionManager.retryFailedUploads(sessionId: sessionId)
-            self.eventEmitter?.emit(
+            eventEmitter?.emit(.uploadRetryStarted, .info, "Retrying uploads")
+            let allUploaded = await transactionManager.retryFailedUploads(sessionId: sessionId)
+            eventEmitter?.emit(
                 .uploadRetryCompleted,
                 allUploaded ? .success : .error,
                 "Upload retry \(allUploaded ? "success" : "partial")"
@@ -187,7 +190,7 @@ final class SessionManager: @unchecked Sendable {
                 return
             }
 
-            let stopResult = await self.transactionManager.stopTransaction(sessionId: sessionId)
+            let stopResult = await transactionManager.stopTransaction(sessionId: sessionId)
             guard case .success = stopResult else {
                 let message: String
                 if case .error(let errorMessage) = stopResult {
@@ -195,12 +198,12 @@ final class SessionManager: @unchecked Sendable {
                 } else {
                     message = "Stop failed"
                 }
-                self.handleError(sessionId: sessionId, code: .stopTransactionFailed, message: message)
+                handleError(sessionId: sessionId, code: .stopTransactionFailed, message: message)
                 return
             }
-            self.eventEmitter?.emit(.stopTransactionSuccess, .success, "Stop transaction success")
+            eventEmitter?.emit(.stopTransactionSuccess, .success, "Stop transaction success")
 
-            let commitResult = await self.transactionManager.commitTransaction(sessionId: sessionId)
+            let commitResult = await transactionManager.commitTransaction(sessionId: sessionId)
             guard case .success = commitResult else {
                 let message: String
                 if case .error(let errorMessage) = commitResult {
@@ -211,27 +214,27 @@ final class SessionManager: @unchecked Sendable {
                 self.handleError(sessionId: sessionId, code: .commitTransactionFailed, message: message)
                 return
             }
-            self.eventEmitter?.emit(.commitTransactionSuccess, .success, "Commit transaction success")
+            eventEmitter?.emit(.commitTransactionSuccess, .success, "Commit transaction success")
 
-            switch await self.transactionManager.pollResult(sessionId: sessionId) {
+            switch await transactionManager.pollResult(sessionId: sessionId) {
             case .success(let response):
-                try? await self.dataManager.updateSessionState(sessionId, SessionState.completed.rawValue)
-                self.transition(to: .completed)
+                try? await dataManager.updateSessionState(sessionId, SessionState.completed.rawValue)
+                transition(to: .completed)
                 let result = Self.mapToSessionResult(sessionId: sessionId, response)
-                self.eventEmitter?.emit(.sessionCompleted, .success, "Session completed")
-                self.delegate?.scribe(EkaScribe.shared, didCompleteSession: sessionId, result: result)
+                eventEmitter?.emit(.sessionCompleted, .success, "Session completed")
+                delegate?.scribe(EkaScribe.shared, didCompleteSession: sessionId, result: result)
 
             case .failed(let error):
-                self.handleError(sessionId: sessionId, code: .transcriptionFailed, message: error)
+                handleError(sessionId: sessionId, code: .transcriptionFailed, message: error)
 
             case .timeout:
-                self.transition(to: .completed)
-                self.eventEmitter?.emit(.pollResultTimeout, .info, "Poll timeout")
+                transition(to: .completed)
+                eventEmitter?.emit(.pollResultTimeout, .info, "Poll timeout")
             }
 
             if let fullAudioResult {
-                self.lastFullAudioPath = fullAudioResult.filePath
-                Task.detached { [weak self] in
+                lastFullAudioPath = fullAudioResult.filePath
+                Task { [weak self] in
                     await self?.uploadFullAudio(fullAudioResult)
                 }
             }
@@ -294,61 +297,12 @@ final class SessionManager: @unchecked Sendable {
             .sink { [weak self] hasFocus in
                 guard let self else { return }
                 if !hasFocus {
-                    self.pause()
+                    pause()
                 }
-                self.eventEmitter?.emit(.audioFocusChanged, .info, hasFocus ? "Audio focus gained" : "Audio focus lost", ["hasFocus": "\(hasFocus)"])
-                self.delegate?.scribe(EkaScribe.shared, didChangeAudioFocus: hasFocus)
+                eventEmitter?.emit(.audioFocusChanged, .info, hasFocus ? "Audio focus gained" : "Audio focus lost", ["hasFocus": "\(hasFocus)"])
+                delegate?.scribe(EkaScribe.shared, didChangeAudioFocus: hasFocus)
             }
             .store(in: &flowCancellables)
-    }
-
-    private func checkMicPermission() async -> Bool {
-        #if os(iOS)
-        if #available(iOS 17.0, *) {
-            switch AVAudioApplication.shared.recordPermission {
-            case .granted:
-                return true
-            case .denied:
-                return false
-            case .undetermined:
-                return await withCheckedContinuation { continuation in
-                    AVAudioApplication.requestRecordPermission { granted in
-                        continuation.resume(returning: granted)
-                    }
-                }
-            @unknown default:
-                return false
-            }
-        }
-
-        let session = AVAudioSession.sharedInstance()
-        switch session.recordPermission {
-        case .granted:
-            return true
-        case .denied:
-            return false
-        case .undetermined:
-            return await withCheckedContinuation { continuation in
-                session.requestRecordPermission { granted in
-                    continuation.resume(returning: granted)
-                }
-            }
-        @unknown default:
-            return false
-        }
-        #else
-        let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        switch status {
-        case .authorized:
-            return true
-        case .denied, .restricted:
-            return false
-        case .notDetermined:
-            return await AVCaptureDevice.requestAccess(for: .audio)
-        @unknown default:
-            return false
-        }
-        #endif
     }
 
     private func uploadFullAudio(_ result: FullAudioResult) async {
@@ -388,7 +342,7 @@ final class SessionManager: @unchecked Sendable {
                     sessionId: sessionId,
                     templateId: output.templateId,
                     isEditable: true,
-                    type: (output.type == "json") ? .json : .markdown,
+                    type: output.templateType ?? .markdown,
                     rawOutput: output.value
                 )
             )

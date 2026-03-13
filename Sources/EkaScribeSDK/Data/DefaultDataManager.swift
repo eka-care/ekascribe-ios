@@ -178,7 +178,7 @@ final class DefaultDataManager: DataManager {
     func observeSession(_ sessionId: String) -> AnyPublisher<SessionRecord?, Never> {
         ValueObservation
             .tracking { db in
-                try SessionRecord.fetchOne(db, key: sessionId)
+                try? SessionRecord.fetchOne(db, key: sessionId)
             }
             .publisher(in: database.dbPool)
             .handleEvents(receiveCompletion: { [weak self] completion in

@@ -9,13 +9,13 @@ struct AudioChunkRecord: Codable, FetchableRecord, MutablePersistableRecord {
     var chunkIndex: Int
     var filePath: String
     var fileName: String
-    var startTimeMs: Int64
-    var endTimeMs: Int64
-    var durationMs: Int64
+    var startTimeMs: Int
+    var endTimeMs: Int
+    var durationMs: Int
     var uploadState: String = "PENDING"
     var retryCount: Int = 0
     var qualityScore: Float?
-    var createdAt: Int64
+    var createdAt: Int
 }
 
 enum UploadState: String {

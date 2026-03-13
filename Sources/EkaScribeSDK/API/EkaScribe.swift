@@ -17,7 +17,7 @@ public final class EkaScribe: @unchecked Sendable {
 
     @Published public private(set) var analyserState: AnalyserState = .idle
 
-    public func initialize(config: EkaScribeConfig, delegate: EkaScribeDelegate) {
+    public func initialize(config: EkaScribeConfig, delegate: EkaScribeDelegate) throws {
         let logger: Logger = config.debugMode ? DefaultLogger() : NoOpLogger()
         let timeProvider = DefaultTimeProvider()
 
@@ -30,7 +30,7 @@ public final class EkaScribe: @unchecked Sendable {
         do {
             database = try ScribeDatabase(path: dbPath)
         } catch {
-            fatalError("Failed to initialize database: \(error.localizedDescription)")
+            throw error
         }
 
         let dataManager = DefaultDataManager(database: database, timeProvider: timeProvider, logger: logger)
@@ -120,7 +120,7 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func startSession(
-        config: SessionConfig = SessionConfig(),
+        config: SessionConfig,
         onStart: @escaping (String) -> Void = { _ in },
         onError: @escaping (ScribeError) -> Void = { _ in }
     ) async {

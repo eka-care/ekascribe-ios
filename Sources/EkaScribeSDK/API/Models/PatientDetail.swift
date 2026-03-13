@@ -1,6 +1,6 @@
 import Foundation
 
-public struct PatientDetail: Sendable, Codable {
+public struct PatientDetail: Sendable {
     public var age: Int?
     public var biologicalSex: String?
     public var name: String?

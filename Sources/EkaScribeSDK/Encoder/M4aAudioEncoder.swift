@@ -11,7 +11,7 @@ final class M4aAudioEncoder: AudioEncoder {
 
     func encode(frames: [AudioFrame], sampleRate: Int, outputPath: String) async throws -> EncodedChunk {
         let pcm = frames.flatMap { $0.pcm }
-        let durationMs = Int64(pcm.count) * 1000 / Int64(max(1, sampleRate))
+        let durationMs = pcm.count * 1000 / max(1, sampleRate)
         let outputURL = URL(fileURLWithPath: outputPath)
 
         do {
@@ -138,13 +138,13 @@ final class M4aAudioEncoder: AudioEncoder {
         }
 
         let attrs = try FileManager.default.attributesOfItem(atPath: pcmFilePath)
-        let pcmFileSize = (attrs[.size] as? Int64) ?? 0
+        let pcmFileSize = (attrs[.size] as? Int) ?? 0
         guard pcmFileSize > 0 else {
             throw ScribeException(code: .encoderFailed, message: "Raw PCM file is empty")
         }
 
         let sampleCount = pcmFileSize / 2 // 16-bit = 2 bytes per sample
-        let durationMs = sampleCount * 1000 / Int64(max(1, sampleRate))
+        let durationMs = sampleCount * 1000 / max(1, sampleRate)
         let outputURL = URL(fileURLWithPath: outputPath)
 
         do {
@@ -234,14 +234,14 @@ final class M4aAudioEncoder: AudioEncoder {
 
     // MARK: - WAV Fallback
 
-    private func encodeWavFromFile(pcmFilePath: String, sampleRate: Int, outputPath: String, durationMs: Int64) throws -> EncodedChunk {
+    private func encodeWavFromFile(pcmFilePath: String, sampleRate: Int, outputPath: String, durationMs: Int) throws -> EncodedChunk {
         let outputURL = URL(fileURLWithPath: outputPath)
         if FileManager.default.fileExists(atPath: outputURL.path) {
             try? FileManager.default.removeItem(at: outputURL)
         }
 
         let attrs = try FileManager.default.attributesOfItem(atPath: pcmFilePath)
-        let dataSize = UInt32((attrs[.size] as? Int64) ?? 0)
+        let dataSize = UInt32((attrs[.size] as? Int) ?? 0)
 
         // Write WAV header
         let numChannels: UInt16 = 1
@@ -291,7 +291,7 @@ final class M4aAudioEncoder: AudioEncoder {
         return EncodedChunk(filePath: outputPath, format: .wav, sizeBytes: size, durationMs: durationMs)
     }
 
-    private func encodeAsWav(pcm: [Int16], sampleRate: Int, outputPath: String, durationMs: Int64) throws -> EncodedChunk {
+    private func encodeAsWav(pcm: [Int16], sampleRate: Int, outputPath: String, durationMs: Int) throws -> EncodedChunk {
         let outputURL = URL(fileURLWithPath: outputPath)
         if FileManager.default.fileExists(atPath: outputURL.path) {
             try? FileManager.default.removeItem(at: outputURL)
@@ -342,8 +342,8 @@ final class M4aAudioEncoder: AudioEncoder {
         }
     }
 
-    private func fileSize(atPath path: String) throws -> Int64 {
+    private func fileSize(atPath path: String) throws -> Int {
         let attrs = try FileManager.default.attributesOfItem(atPath: path)
-        return (attrs[.size] as? Int64) ?? 0
+        return (attrs[.size] as? Int) ?? 0
     }
 }

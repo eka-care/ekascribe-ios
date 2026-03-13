@@ -10,9 +10,9 @@ public struct SessionConfig: Sendable {
     public var speciality: String?
 
     public init(
-        languages: [String] = ["en-IN"],
-        mode: String = "dictation",
-        modelType: String = "pro",
+        languages: [String],
+        mode: String,
+        modelType: String,
         outputTemplates: [OutputTemplate]? = nil,
         patientDetails: PatientDetail? = nil,
         section: String? = nil,

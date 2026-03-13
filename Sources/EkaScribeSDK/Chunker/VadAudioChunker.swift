@@ -92,8 +92,8 @@ final class VadAudioChunker: AudioChunker {
     }
 
     private func createChunk(isFlush: Bool) -> AudioChunk {
-        let startMs = Int64(Double(chunkStartSampleOffset) / Double(sampleRate) * 1000)
-        let endMs = Int64(Double(chunkStartSampleOffset + accumulatedSamples) / Double(sampleRate) * 1000)
+        let startMs = Int(Double(chunkStartSampleOffset) / Double(sampleRate) * 1000)
+        let endMs = Int(Double(chunkStartSampleOffset + accumulatedSamples) / Double(sampleRate) * 1000)
 
         let chunk = AudioChunk(
             chunkId: IdGenerator.chunkId(sessionId: sessionId, index: chunkIndex),

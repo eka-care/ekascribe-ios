@@ -26,9 +26,13 @@ struct ScribeResultResponse: Decodable {
         let name: String?
         let status: ResultStatus?
         let templateId: String?
-        let type: String?
+        private let type: String?
         let value: String?
         let warnings: [ResultWarningDTO?]?
+        
+        var templateType: TemplateType? {
+            TemplateType(rawValue: type ?? "")
+        }
 
         enum CodingKeys: String, CodingKey {
             case errors

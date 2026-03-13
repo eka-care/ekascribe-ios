@@ -5,7 +5,7 @@ final class IOSAudioRecorder: AudioRecorder {
     private let engine = AVAudioEngine()
     private let config: RecorderConfig
     private let logger: Logger
-    private var frameIndex: Int64 = 0
+    private var frameIndex: Int = 0
     private var isPaused = false
     private var interruptionObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
@@ -111,7 +111,7 @@ final class IOSAudioRecorder: AudioRecorder {
 
             let frame = AudioFrame(
                 pcm: pcm,
-                timestampMs: Int64(Date().timeIntervalSince1970 * 1000),
+                timestampMs: Int(Date().timeIntervalSince1970 * 1000),
                 sampleRate: self.config.sampleRate,
                 frameIndex: self.frameIndex
             )

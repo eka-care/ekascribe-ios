@@ -5,11 +5,11 @@ struct AudioChunk {
     let sessionId: String
     let index: Int
     let frames: [AudioFrame]
-    let startTimeMs: Int64
-    let endTimeMs: Int64
+    let startTimeMs: Int
+    let endTimeMs: Int
     let quality: AudioQuality?
 
-    var durationMs: Int64 {
+    var durationMs: Int {
         endTimeMs - startTimeMs
     }
 }

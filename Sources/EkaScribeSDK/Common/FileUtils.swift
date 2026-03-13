@@ -13,7 +13,7 @@ extension URL {
         FileManager.default.fileExists(atPath: path)
     }
 
-    var fileSize: Int64 {
-        (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int64) ?? 0
+    var fileSize: Int {
+        (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
     }
 }

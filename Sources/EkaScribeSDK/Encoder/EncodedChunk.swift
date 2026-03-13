@@ -3,8 +3,8 @@ import Foundation
 struct EncodedChunk {
     let filePath: String
     let format: AudioFormat
-    let sizeBytes: Int64
-    let durationMs: Int64
+    let sizeBytes: Int
+    let durationMs: Int
 
     enum AudioFormat {
         case wav
