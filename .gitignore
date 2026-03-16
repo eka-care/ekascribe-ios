@@ -6,3 +6,10 @@ DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+
+# Claude Code workflow files (private)
+CLAUDE.md
+plan/
+
+# Private knowledge management
+knowledge/LESSONS.md

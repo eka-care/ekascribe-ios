@@ -8,14 +8,12 @@ final class ScribeAPIService: ScribeAPIServiceProtocol {
 
     init(
         baseURL: String,
-        authTokenProvider: @escaping @Sendable () async -> String?,
-        tokenStorage: (any EkaScribeTokenStorage)?,
+        tokenStorage: any EkaScribeTokenStorage,
         refreshTokenPath: String,
         logger: Logger
     ) {
         let interceptor = AuthInterceptor(
             baseURL: baseURL,
-            tokenProvider: authTokenProvider,
             tokenStorage: tokenStorage,
             refreshTokenPath: refreshTokenPath,
             logger: logger
@@ -91,62 +89,37 @@ final class ScribeAPIService: ScribeAPIServiceProtocol {
         body: B?,
         query: [String: String] = [:]
     ) async -> NetworkResult<T> {
-        guard let url = buildURL(path: path, query: query) else {
-            return .serverError(statusCode: -1, message: "Invalid URL")
-        }
+        let url = baseURL + path
 
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
+        let dataRequest: DataRequest
         if let body {
-            do {
-                request.httpBody = try JSONEncoder().encode(body)
-            } catch {
-                return .unknownError(error)
-            }
+            dataRequest = session.request(url, method: method, parameters: body,
+                                          encoder: JSONParameterEncoder.default)
+        } else if !query.isEmpty {
+            dataRequest = session.request(url, method: method, parameters: query,
+                                          encoder: URLEncodedFormParameterEncoder.default)
+        } else {
+            dataRequest = session.request(url, method: method)
         }
 
-        do {
-            let response = await session.request(request).validate().serializingData().response
-            let statusCode = response.response?.statusCode ?? -1
-            switch response.result {
-            case .success(let data):
-                if (200..<300).contains(statusCode) {
-                    do {
-                        let decoded = try JSONDecoder().decode(T.self, from: data)
-                        return .success(decoded, statusCode: statusCode)
-                    } catch {
-                        logger.error("API", "Decoding failed: \(path)", error)
-                        return .unknownError(error)
-                    }
-                }
-                let message = extractErrorMessage(data: data) ?? HTTPURLResponse.localizedString(forStatusCode: statusCode)
+        let response = await dataRequest.validate().serializingDecodable(T.self).response
+        let statusCode = response.response?.statusCode ?? -1
+
+        switch response.result {
+        case .success(let decoded):
+            return .success(decoded, statusCode: statusCode)
+
+        case .failure(let afError):
+            if afError.isSessionTaskError || afError.isExplicitlyCancelledError {
+                return .networkError(afError)
+            }
+            if let data = response.data {
+                let message = extractErrorMessage(data: data)
+                    ?? HTTPURLResponse.localizedString(forStatusCode: statusCode)
                 return .serverError(statusCode: statusCode, message: message)
-
-            case .failure(let afError):
-                if afError.isSessionTaskError || afError.isExplicitlyCancelledError {
-                    return .networkError(afError)
-                }
-                // After .validate(), non-2xx responses end up here (including after retry)
-                if let data = response.data {
-                    let message = extractErrorMessage(data: data) ?? HTTPURLResponse.localizedString(forStatusCode: statusCode)
-                    return .serverError(statusCode: statusCode, message: message)
-                }
-                return .unknownError(afError)
             }
+            return .unknownError(afError)
         }
-    }
-
-    private func buildURL(path: String, query: [String: String]) -> URL? {
-        guard var components = URLComponents(string: baseURL) else { return nil }
-        let prefix = components.path.hasSuffix("/") ? String(components.path.dropLast()) : components.path
-        let suffix = path.hasPrefix("/") ? path : "/" + path
-        components.path = prefix + suffix
-        if !query.isEmpty {
-            components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
-        }
-        return components.url
     }
 
     private func extractErrorMessage(data: Data) -> String? {
@@ -160,25 +133,17 @@ final class ScribeAPIService: ScribeAPIServiceProtocol {
 private struct EmptyBody: Encodable {}
 
 final class AuthInterceptor: RequestInterceptor, @unchecked Sendable {
-    private let tokenProvider: @Sendable () async -> String?
+    private let tokenStorage: any EkaScribeTokenStorage
     private let refreshProvider: DefaultTokenProvider?
 
     init(
         baseURL: String,
-        tokenProvider: @escaping @Sendable () async -> String?,
-        tokenStorage: (any EkaScribeTokenStorage)?,
+        tokenStorage: any EkaScribeTokenStorage,
         refreshTokenPath: String,
         logger: Logger
     ) {
-        if let tokenStorage {
-            self.tokenProvider = { tokenStorage.getAccessToken() }
-        } else {
-            self.tokenProvider = tokenProvider
-        }
-        if
-            let tokenStorage,
-            let refreshURL = Self.buildURL(baseURL: baseURL, path: refreshTokenPath)
-        {
+        self.tokenStorage = tokenStorage
+        if let refreshURL = URL(string: baseURL + refreshTokenPath) {
             self.refreshProvider = DefaultTokenProvider(
                 tokenStorage: tokenStorage,
                 refreshURL: refreshURL,
@@ -197,7 +162,7 @@ final class AuthInterceptor: RequestInterceptor, @unchecked Sendable {
         let safeCompletion = SendableClosure(completion)
         Task {
             var request = urlRequest
-            if let token = await tokenProvider() {
+            if let token = tokenStorage.getAccessToken() {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
                 request.setValue(token, forHTTPHeaderField: "auth")
             }
@@ -235,24 +200,13 @@ final class AuthInterceptor: RequestInterceptor, @unchecked Sendable {
             }
         }
     }
-
-    private static func buildURL(baseURL: String, path: String) -> URL? {
-        if let absolute = URL(string: path), absolute.scheme != nil {
-            return absolute
-        }
-        guard var components = URLComponents(string: baseURL) else { return nil }
-        let prefix = components.path.hasSuffix("/") ? String(components.path.dropLast()) : components.path
-        let suffix = path.hasPrefix("/") ? path : "/" + path
-        components.path = prefix + suffix
-        components.queryItems = nil
-        return components.url
-    }
 }
 
 private actor DefaultTokenProvider {
     private let tokenStorage: any EkaScribeTokenStorage
     private let refreshURL: URL
     private let logger: Logger
+    private let refreshSession = Session()
     private var refreshTask: Task<String?, Never>?
 
     init(tokenStorage: any EkaScribeTokenStorage, refreshURL: URL, logger: Logger) {
@@ -295,20 +249,21 @@ private actor DefaultTokenProvider {
         }
 
         let payload = AuthRefreshRequest(refresh: refreshToken, sessionToken: sessionToken)
-        var request = URLRequest(url: refreshURL)
-        request.httpMethod = HTTPMethod.post.rawValue
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        do {
-            request.httpBody = try JSONEncoder().encode(payload)
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-            guard (200..<300).contains(statusCode) else {
-                logger.warn("AuthInterceptor", "Token refresh failed with status: \(statusCode)")
-                return nil
-            }
+        let response = await refreshSession.request(
+            refreshURL,
+            method: .post,
+            parameters: payload,
+            encoder: JSONParameterEncoder.default
+        )
+        .validate()
+        .serializingDecodable(AuthRefreshResponse.self)
+        .response
 
-            let decoded = try JSONDecoder().decode(AuthRefreshResponse.self, from: data)
+        let statusCode = response.response?.statusCode ?? -1
+
+        switch response.result {
+        case .success(let decoded):
             guard
                 let newAccess = decoded.sessionToken,
                 !newAccess.isEmpty,
@@ -318,11 +273,11 @@ private actor DefaultTokenProvider {
                 logger.warn("AuthInterceptor", "Token refresh failed: invalid response body")
                 return nil
             }
-
             tokenStorage.saveTokens(accessToken: newAccess, refreshToken: newRefresh)
             return newAccess
-        } catch {
-            logger.warn("AuthInterceptor", "Token refresh failed with exception", error)
+
+        case .failure(let afError):
+            logger.warn("AuthInterceptor", "Token refresh failed (status: \(statusCode))", afError)
             return nil
         }
     }

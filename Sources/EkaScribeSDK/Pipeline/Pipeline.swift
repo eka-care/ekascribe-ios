@@ -329,7 +329,7 @@ extension Pipeline {
             onEvent: ((SessionEventName, EventType, String, [String: String]) -> Void)? = nil
         ) -> PipelineProtocol {
             let pipelineConfig = PipelineConfig(enableAnalyser: config.enableAnalyser)
-            let recorderConfig = RecorderConfig(sampleRate: config.sampleRate, frameSize: config.frameSize)
+            let recorderConfig = RecorderConfig(sampleRate: config.sampleRate.intValue, frameSize: config.frameSize.intValue)
             let recorder = IOSAudioRecorder(config: recorderConfig, logger: logger)
 
             let preBuffer = PreBuffer(capacity: pipelineConfig.preBufferCapacity)
@@ -347,7 +347,7 @@ extension Pipeline {
                 analyser = NoOpAudioAnalyser()
             }
 
-            let vadProvider = LibfvadProvider(sampleRate: config.sampleRate, frameSize: config.frameSize, logger: logger)
+            let vadProvider = LibfvadProvider(sampleRate: config.sampleRate.intValue, frameSize: config.frameSize.intValue, logger: logger)
             vadProvider.load()
 
             let chunkConfig = ChunkConfig(
@@ -361,7 +361,7 @@ extension Pipeline {
                 vadProvider: vadProvider,
                 config: chunkConfig,
                 sessionId: sessionId,
-                sampleRate: config.sampleRate,
+                sampleRate: config.sampleRate.intValue,
                 logger: logger
             )
 

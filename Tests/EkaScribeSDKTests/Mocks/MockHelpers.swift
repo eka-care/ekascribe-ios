@@ -448,6 +448,28 @@ final class MockAudioChunker: AudioChunker {
     func release() { releaseCalled = true }
 }
 
+// MARK: - MockTokenStorage
+
+final class MockTokenStorage: EkaScribeTokenStorage {
+    var accessToken: String? = "test-token"
+    var refreshToken: String? = "test-refresh-token"
+    var savedAccessToken: String?
+    var savedRefreshToken: String?
+    var sessionExpiredCalled = false
+
+    func getAccessToken() -> String? { accessToken }
+    func getRefreshToken() -> String? { refreshToken }
+
+    func saveTokens(accessToken: String, refreshToken: String) {
+        savedAccessToken = accessToken
+        savedRefreshToken = refreshToken
+    }
+
+    func onSessionExpired() {
+        sessionExpiredCalled = true
+    }
+}
+
 // MARK: - Test Helpers
 
 func makeFrame(pcm: [Int16] = Array(repeating: 0, count: 512), timestampMs: Int = 0, sampleRate: Int = 16000, frameIndex: Int = 0) -> AudioFrame {

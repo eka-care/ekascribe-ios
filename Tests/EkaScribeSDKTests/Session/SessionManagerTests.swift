@@ -17,13 +17,9 @@ final class SessionManagerTests: XCTestCase {
     override func setUp() {
         super.setUp()
         config = EkaScribeConfig(
-            baseURL: "https://test.example.com",
-            credentialsURL: "https://creds.example.com",
-            bucketName: "test-bucket",
-            authTokenProvider: { "test-token" },
-            debugMode: true,
-            pollMaxRetries: 3,
-            pollDelayMs: 10
+            environment: .production,
+            tokenStorage: MockTokenStorage(),
+            debugMode: true
         )
         dataManager = MockDataManager()
         pipelineFactory = MockPipelineFactory()

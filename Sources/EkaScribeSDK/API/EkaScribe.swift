@@ -37,7 +37,6 @@ public final class EkaScribe: @unchecked Sendable {
 
         let apiService = ScribeAPIService(
             baseURL: config.baseURL,
-            authTokenProvider: config.authTokenProvider,
             tokenStorage: config.tokenStorage,
             refreshTokenPath: config.refreshTokenPath,
             logger: logger
@@ -45,7 +44,6 @@ public final class EkaScribe: @unchecked Sendable {
 
         let credentialProvider = S3CredentialProvider(
             credentialsURL: config.credentialsURL,
-            authTokenProvider: config.authTokenProvider,
             tokenStorage: config.tokenStorage,
             refreshBaseURL: config.baseURL,
             refreshTokenPath: config.refreshTokenPath,
@@ -454,7 +452,7 @@ public final class EkaScribe: @unchecked Sendable {
         )
     }
 
-    private static func mapSession(_ session: SessionRecord) -> ScribeSession? {
+    static func mapSession(_ session: SessionRecord) -> ScribeSession? {
         guard let stage = UploadStage(rawValue: session.uploadStage) else {
             return nil
         }
@@ -468,7 +466,7 @@ public final class EkaScribe: @unchecked Sendable {
         )
     }
 
-    private func mapUserConfigs(_ response: GetConfigResponse) -> UserConfigs? {
+    func mapUserConfigs(_ response: GetConfigResponse) -> UserConfigs? {
         guard let data = response.data else { return nil }
 
         let consultationModes = ConsultationModeConfig(

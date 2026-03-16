@@ -3,7 +3,6 @@ import Foundation
 /**
  Storage contract for session + refresh tokens.
 
- Mirrors the Android `TokenStorage` behavior used by Eka Network:
  - provide current access/session token
  - provide current refresh token
  - persist refreshed token pair

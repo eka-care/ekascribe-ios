@@ -159,7 +159,7 @@ final class SessionManager: @unchecked Sendable {
     }
 
     func stop() {
-        // TODO :- Here as well throw error if not successful stop
+        //TODO: - Here as well throw error if not successful stop
         guard [.recording, .paused].contains(currentState) else { return }
         transition(to: .stopping)
         eventEmitter?.emit(.sessionStopInitiated, .info, "Session stop initiated")
@@ -306,7 +306,7 @@ final class SessionManager: @unchecked Sendable {
             .store(in: &flowCancellables)
     }
 
-    private func uploadFullAudio(_ result: FullAudioResult) async {
+    func uploadFullAudio(_ result: FullAudioResult) async {
         let file = URL(fileURLWithPath: result.filePath)
         let format = EncodedChunk.AudioFormat.from(filePath: result.filePath)
         let metadata = UploadMetadata(
