@@ -13,3 +13,6 @@ plan/
 
 # Private knowledge management
 knowledge/LESSONS.md
+
+# SPM resolved file (libraries should not commit this)
+Package.resolved
