@@ -258,7 +258,7 @@ final class TransactionManager: TransactionManaging {
                 return .error(message: "Poll timeout")
             }
 
-        case .completed, .failure, .error:
+        case .completed, .failure, .error, .cancelled:
             return .success()
         }
     }

@@ -141,6 +141,10 @@ public final class EkaScribe: @unchecked Sendable {
         sessionManager?.stop()
     }
 
+    public func cancelSession() {
+        sessionManager?.cancel()
+    }
+
     public func isRecording() -> Bool {
         sessionManager?.currentState == .recording
     }

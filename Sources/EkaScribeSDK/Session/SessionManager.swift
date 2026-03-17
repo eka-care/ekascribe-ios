@@ -241,6 +241,29 @@ final class SessionManager: @unchecked Sendable {
         }
     }
 
+    func cancel() {
+        guard [.recording, .paused].contains(currentState) else { return }
+        let sessionId = activeSessionId
+
+        pipeline?.cancel()
+        Task { await chunkUploader.clearCache() }
+
+        if let sessionId {
+            Task {
+                try? await dataManager.updateUploadStage(sessionId, TransactionStage.cancelled.rawValue)
+            }
+        }
+
+        eventEmitter?.emit(.sessionCancelled, .info, "Session cancelled")
+
+        if let sessionId {
+            delegate?.scribe(EkaScribe.shared, didCancelSession: sessionId)
+        }
+
+        cleanup()
+        transition(to: .idle)
+    }
+
     func destroy() {
         stopTask?.cancel()
         cleanup()

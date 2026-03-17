@@ -63,4 +63,5 @@ public enum SessionEventName: String, Sendable {
     case fullAudioGenerationFailed
     case fullAudioUploaded
     case fullAudioUploadFailed
+    case sessionCancelled
 }

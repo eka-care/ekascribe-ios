@@ -8,4 +8,5 @@ public enum UploadStage: String, Codable, Sendable {
     case completed = "COMPLETED"
     case failure = "FAILURE"
     case error = "ERROR"
+    case cancelled = "CANCELLED"
 }

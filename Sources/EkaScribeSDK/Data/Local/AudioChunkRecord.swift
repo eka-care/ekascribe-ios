@@ -33,4 +33,5 @@ enum TransactionStage: String {
     case completed = "COMPLETED"
     case failure = "FAILURE"
     case error = "ERROR"
+    case cancelled = "CANCELLED"
 }

@@ -17,9 +17,9 @@ public enum SessionState: String, Codable, Sendable {
         case .starting:
             return [.recording, .error].contains(target)
         case .recording:
-            return [.paused, .stopping, .error].contains(target)
+            return [.paused, .stopping, .idle, .error].contains(target)
         case .paused:
-            return [.recording, .stopping].contains(target)
+            return [.recording, .stopping, .idle].contains(target)
         case .stopping:
             return [.processing, .completed, .error].contains(target)
         case .processing:
