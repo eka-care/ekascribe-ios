@@ -1,8 +1,7 @@
-import Alamofire
 import Foundation
 
 actor S3CredentialProvider {
-    private let session: Session
+    private let networkClient: ScribeNetworkClient
     private let credentialsURL: String
     private let logger: Logger
     private var cachedCredentials: S3Credentials?
@@ -15,19 +14,11 @@ actor S3CredentialProvider {
 
     init(
         credentialsURL: String,
-        tokenStorage: any EkaScribeTokenStorage,
-        refreshBaseURL: String,
-        refreshTokenPath: String,
+        networkClient: ScribeNetworkClient,
         logger: Logger
     ) {
-        let interceptor = AuthInterceptor(
-            baseURL: refreshBaseURL,
-            tokenStorage: tokenStorage,
-            refreshTokenPath: refreshTokenPath,
-            logger: logger
-        )
-        self.session = Session(interceptor: interceptor)
         self.credentialsURL = credentialsURL
+        self.networkClient = networkClient
         self.logger = logger
     }
 
@@ -45,13 +36,10 @@ actor S3CredentialProvider {
     }
 
     private func fetchCredentials() async -> S3Credentials? {
-        let response = await session.request(credentialsURL, method: .get)
-            .validate()
-            .serializingDecodable(AwsS3ConfigResponse.self)
-            .response
+        let result: NetworkResult<AwsS3ConfigResponse> = await networkClient.execute(url: credentialsURL)
 
-        switch response.result {
-        case .success(let decoded):
+        switch result {
+        case .success(let decoded, _):
             guard
                 let access = decoded.credentials?.accessKeyId,
                 let secret = decoded.credentials?.secretKey,
@@ -62,9 +50,16 @@ actor S3CredentialProvider {
             }
             return S3Credentials(accessKey: access, secretKey: secret, sessionToken: sessionToken)
 
-        case .failure(let afError):
-            let statusCode = response.response?.statusCode ?? -1
-            logger.error("S3Credentials", "Credential fetch failed (status: \(statusCode))", afError)
+        case .serverError(let statusCode, let message):
+            logger.error("S3Credentials", "Credential fetch failed (status: \(statusCode)): \(message)")
+            return nil
+
+        case .networkError(let error):
+            logger.error("S3Credentials", "Credential fetch network error", error)
+            return nil
+
+        case .unknownError(let error):
+            logger.error("S3Credentials", "Credential fetch unknown error", error)
             return nil
         }
     }

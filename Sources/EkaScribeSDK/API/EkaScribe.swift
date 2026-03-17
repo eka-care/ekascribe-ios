@@ -9,7 +9,8 @@ public final class EkaScribe: @unchecked Sendable {
     private var sessionManager: SessionManager?
     private var transactionManager: TransactionManager?
     private var dataManager: DataManager?
-    private var apiService: ScribeAPIService?
+    private var networkClient: ScribeNetworkClient?
+    private var apiService: ScribeAPIServiceProtocol?
     private var modelDownloader: ModelDownloader?
     private var isInitialized = false
     private var config: EkaScribeConfig?
@@ -35,18 +36,18 @@ public final class EkaScribe: @unchecked Sendable {
 
         let dataManager = DefaultDataManager(database: database, timeProvider: timeProvider, logger: logger)
 
-        let apiService = ScribeAPIService(
+        let networkClient = ScribeNetworkClient(
             baseURL: config.baseURL,
+            clientInfo: config.clientInfo,
             tokenStorage: config.tokenStorage,
             refreshTokenPath: config.refreshTokenPath,
             logger: logger
         )
+        let apiService = ScribeAPIService(networkClient: networkClient)
 
         let credentialProvider = S3CredentialProvider(
             credentialsURL: config.credentialsURL,
-            tokenStorage: config.tokenStorage,
-            refreshBaseURL: config.baseURL,
-            refreshTokenPath: config.refreshTokenPath,
+            networkClient: networkClient,
             logger: logger
         )
         let chunkUploader = S3ChunkUploader(
@@ -100,6 +101,7 @@ public final class EkaScribe: @unchecked Sendable {
         self.sessionManager = sessionManager
         self.transactionManager = transactionManager
         self.dataManager = dataManager
+        self.networkClient = networkClient
         self.apiService = apiService
         self.modelDownloader = downloader
         self.isInitialized = true
@@ -186,14 +188,14 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func getSessionOutput(_ sessionId: String) async -> Result<SessionResult, Error> {
-        let apiService: ScribeAPIService
+        let api: ScribeAPIServiceProtocol
         do {
-            apiService = try requireAPI()
+            api = try requireAPI()
         } catch {
             return .failure(error)
         }
 
-        switch await apiService.getTransactionResult(sessionId) {
+        switch await api.getTransactionResult(sessionId) {
         case .success(let response, _):
             return .success(SessionManager.mapToSessionResult(sessionId: sessionId, response))
         case .serverError(_, let message):
@@ -228,14 +230,14 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func convertTransactionResult(_ sessionId: String, templateId: String) async -> Result<Bool, Error> {
-        let apiService: ScribeAPIService
+        let api: ScribeAPIServiceProtocol
         do {
-            apiService = try requireAPI()
+            api = try requireAPI()
         } catch {
             return .failure(error)
         }
 
-        switch await apiService.convertTransactionResult(sessionId, templateId: templateId) {
+        switch await api.convertTransactionResult(sessionId, templateId: templateId) {
         case .success:
             return .success(true)
         case .serverError(_, let message):
@@ -246,15 +248,15 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func updateSessionResult(_ sessionId: String, updatedData: [SessionData]) async -> Result<Bool, Error> {
-        let apiService: ScribeAPIService
+        let api: ScribeAPIServiceProtocol
         do {
-            apiService = try requireAPI()
+            api = try requireAPI()
         } catch {
             return .failure(error)
         }
 
         let request = updatedData.map { UpdateSessionRequestItem(data: $0.data, templateId: $0.templateId) }
-        switch await apiService.updateSession(sessionId, request) {
+        switch await api.updateSession(sessionId, request) {
         case .success:
             return .success(true)
         case .serverError(_, let message):
@@ -265,14 +267,14 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func getTemplates() async -> Result<[TemplateItem], Error> {
-        let apiService: ScribeAPIService
+        let api: ScribeAPIServiceProtocol
         do {
-            apiService = try requireAPI()
+            api = try requireAPI()
         } catch {
             return .failure(error)
         }
 
-        switch await apiService.getTemplates() {
+        switch await api.getTemplates() {
         case .success(let response, _):
             let items = response.data?.templates?.compactMap { dto -> TemplateItem? in
                 guard let id = dto.id, let title = dto.title else { return nil }
@@ -296,15 +298,15 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func updateTemplates(favouriteTemplates: [String]) async -> Result<Void, Error> {
-        let apiService: ScribeAPIService
+        let api: ScribeAPIServiceProtocol
         do {
-            apiService = try requireAPI()
+            api = try requireAPI()
         } catch {
             return .failure(error)
         }
 
         let request = UpdateTemplatesRequest(data: .init(myTemplates: favouriteTemplates))
-        switch await apiService.updateTemplates(request) {
+        switch await api.updateTemplates(request) {
         case .success:
             return .success(())
         case .serverError(_, let message):
@@ -315,14 +317,14 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func getUserConfigs() async -> Result<UserConfigs, Error> {
-        let apiService: ScribeAPIService
+        let api: ScribeAPIServiceProtocol
         do {
-            apiService = try requireAPI()
+            api = try requireAPI()
         } catch {
             return .failure(error)
         }
 
-        switch await apiService.getUserConfig() {
+        switch await api.getUserConfig() {
         case .success(let response, _):
             guard let config = mapUserConfigs(response) else {
                 return .failure(ScribeException(code: .unknown, message: "Invalid user config payload"))
@@ -338,9 +340,9 @@ public final class EkaScribe: @unchecked Sendable {
     }
 
     public func updateUserConfigs(_ prefs: SelectedUserPreferences) async -> Result<Bool, Error> {
-        let apiService: ScribeAPIService
+        let api: ScribeAPIServiceProtocol
         do {
-            apiService = try requireAPI()
+            api = try requireAPI()
         } catch {
             return .failure(error)
         }
@@ -354,7 +356,7 @@ public final class EkaScribe: @unchecked Sendable {
             )
         )
 
-        switch await apiService.updateUserConfig(request) {
+        switch await api.updateUserConfig(request) {
         case .success:
             return .success(true)
         case .serverError(_, let message):
@@ -410,6 +412,7 @@ public final class EkaScribe: @unchecked Sendable {
         sessionManager = nil
         transactionManager = nil
         dataManager = nil
+        networkClient = nil
         apiService = nil
         modelDownloader = nil
         config = nil
@@ -438,7 +441,7 @@ public final class EkaScribe: @unchecked Sendable {
         return transactionManager
     }
 
-    private func requireAPI() throws -> ScribeAPIService {
+    private func requireAPI() throws -> ScribeAPIServiceProtocol {
         guard isInitialized, let apiService else {
             throw notInitializedError()
         }

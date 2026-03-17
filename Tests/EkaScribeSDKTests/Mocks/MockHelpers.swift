@@ -332,6 +332,7 @@ final class MockPipeline: PipelineProtocol {
     var pauseCalled = false
     var resumeCalled = false
     var stopCalled = false
+    var cancelCalled = false
     var stopResult: FullAudioResult?
 
     let audioFocusSubject = CurrentValueSubject<Bool, Never>(true)
@@ -350,6 +351,7 @@ final class MockPipeline: PipelineProtocol {
         stopCalled = true
         return stopResult
     }
+    func cancel() { cancelCalled = true }
 }
 
 // MARK: - MockPipelineFactory

@@ -7,6 +7,7 @@ public struct EkaScribeConfig {
     public let enableAnalyser: Bool
     public let debugMode: Bool
     public let fullAudioOutput: Bool
+    public let clientInfo: ScribeClientInfo
     public let tokenStorage: any EkaScribeTokenStorage
 
     var baseURL: String { environment.baseURL }
@@ -24,6 +25,7 @@ public struct EkaScribeConfig {
 
     public init(
         environment: EkaScribeEnvironment = .production,
+        clientInfo: ScribeClientInfo,
         tokenStorage: any EkaScribeTokenStorage,
         sampleRate: SampleRate = .hz16000,
         frameSize: FrameSize = .samples512,
@@ -32,6 +34,7 @@ public struct EkaScribeConfig {
         fullAudioOutput: Bool = false
     ) {
         self.environment = environment
+        self.clientInfo = clientInfo
         self.tokenStorage = tokenStorage
         self.sampleRate = sampleRate
         self.frameSize = frameSize

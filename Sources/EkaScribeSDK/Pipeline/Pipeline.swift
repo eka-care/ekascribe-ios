@@ -90,8 +90,8 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
     func start() {
         recorder.onFrame = { [weak self] frame in
             guard let self else { return }
-            if !self.preBuffer.write(frame) {
-                self.logger.warn("Pipeline", "PreBuffer full, frame dropped: \(frame.frameIndex)")
+            if !preBuffer.write(frame) { //guard
+                logger.warn("Pipeline", "PreBuffer full, frame dropped: \(frame.frameIndex)")
             }
         }
 
@@ -143,10 +143,35 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
         return result
     }
 
+    func cancel() {
+        recorder.stop()
+
+        // Finish continuations to unblock `for await` loops
+        frameContinuation.finish()
+        chunkContinuation.finish()
+
+        // Cancel all tasks
+        chunkingTask?.cancel()
+        persistenceTask?.cancel()
+        qualityForwardTask?.cancel()
+
+        // Close file handle
+        rawPcmFileHandle?.closeFile()
+        rawPcmFileHandle = nil
+
+        // Release resources
+        analyser.release()
+        chunker.release()
+        preBuffer.clear()
+
+        logger.info("Pipeline", "Pipeline cancelled for session: \(sessionId)")
+    }
+
     private func startChunkingTask() {
         chunkingTask = Task { [weak self] in
             guard let self else { return }
             for await frame in self.frameStream {
+                guard !Task.isCancelled else { break }
                 // Stream PCM to disk instead of accumulating in memory
                 if let handle = self.rawPcmFileHandle {
                     self.recordedSampleRate = frame.sampleRate
@@ -161,7 +186,7 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
                 }
             }
 
-            if let lastChunk = self.chunker.flush() {
+            if !Task.isCancelled, let lastChunk = self.chunker.flush() {
                 self.chunkContinuation.yield(lastChunk)
             }
             self.chunkContinuation.finish()
@@ -172,6 +197,7 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
         persistenceTask = Task { [weak self] in
             guard let self else { return }
             for await chunk in chunkStream {
+                guard !Task.isCancelled else { break }
                 do {
                     let outputPath = outputDir.appendingPathComponent("\(sessionId)_\(chunk.index + 1).m4a").path
                     let sampleRate = chunk.frames.first?.sampleRate ?? 16_000

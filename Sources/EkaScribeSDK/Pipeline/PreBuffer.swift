@@ -1,13 +1,12 @@
 import Foundation
-import os
+import Atomics
 
 final class PreBuffer: @unchecked Sendable {
     private let capacity: Int
     private var buffer: [AudioFrame?]
-    private var writeIndex = 0
-    private var readIndex = 0
-    private var count = 0
-    private let lock = NSLock()
+    private let writeIndex = ManagedAtomic<Int>(0)
+    private let readIndex = ManagedAtomic<Int>(0)
+    private let count = ManagedAtomic<Int>(0)
 
     init(capacity: Int = 2000) {
         self.capacity = capacity
@@ -15,41 +14,40 @@ final class PreBuffer: @unchecked Sendable {
     }
 
     func write(_ frame: AudioFrame) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard count < capacity else { return false }
+        guard count.load(ordering: .acquiring) < capacity else { return false }
 
-        buffer[writeIndex] = frame
-        writeIndex = (writeIndex + 1) % capacity
-        count += 1
+        let index = writeIndex.load(ordering: .relaxed)
+        buffer[index] = frame
+        writeIndex.store((index + 1) % capacity, ordering: .releasing)
+        count.wrappingIncrement(ordering: .releasing)
         return true
     }
 
     func drain() -> [AudioFrame] {
-        lock.lock()
-        defer { lock.unlock() }
+        let currentCount = count.load(ordering: .acquiring)
+        guard currentCount > 0 else { return [] }
 
-        guard count > 0 else { return [] }
         var frames: [AudioFrame] = []
-        frames.reserveCapacity(count)
+        frames.reserveCapacity(currentCount)
 
-        for _ in 0..<count {
-            if let frame = buffer[readIndex] {
+        var index = readIndex.load(ordering: .relaxed)
+        for _ in 0..<currentCount {
+            if let frame = buffer[index] {
                 frames.append(frame)
-                buffer[readIndex] = nil
+                buffer[index] = nil
             }
-            readIndex = (readIndex + 1) % capacity
+            index = (index + 1) % capacity
         }
-        count = 0
+
+        readIndex.store(index, ordering: .releasing)
+        count.wrappingDecrement(by: currentCount, ordering: .releasing)
         return frames
     }
 
     func clear() {
-        lock.lock()
-        defer { lock.unlock() }
-        writeIndex = 0
-        readIndex = 0
-        count = 0
+        writeIndex.store(0, ordering: .relaxed)
+        readIndex.store(0, ordering: .relaxed)
+        count.store(0, ordering: .relaxed)
         buffer = Array(repeating: nil, count: capacity)
     }
 }

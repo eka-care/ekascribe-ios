@@ -159,7 +159,6 @@ final class SessionManager: @unchecked Sendable {
     }
 
     func stop() {
-        //TODO: - Here as well throw error if not successful stop
         guard [.recording, .paused].contains(currentState) else { return }
         transition(to: .stopping)
         eventEmitter?.emit(.sessionStopInitiated, .info, "Session stop initiated")
@@ -265,6 +264,7 @@ final class SessionManager: @unchecked Sendable {
 
     private func cleanup() {
         flowCancellables.removeAll()
+        pipeline?.cancel()
         pipeline = nil
         activeSessionId = nil
         activeSessionConfig = nil
