@@ -10,10 +10,10 @@ let package = Package(
         .library(name: "EkaScribeSDK", targets: ["EkaScribeSDK"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.24.0"),
+        .package(url: "https://github.com/groue/GRDB.swift.git", branch: "master"),
         .package(url: "https://github.com/aws-amplify/aws-sdk-ios-spm.git", .upToNextMajor(from: "2.36.6")),
         .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager.git", exact: "1.17.0"),
-        .package(url: "https://github.com/gfreezy/libfvad.git", .upToNextMajor(from: "1.0.0")),
+        .package(url: "https://github.com/gfreezy/libfvad.git", branch: "main"),
         .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.10.2")),
         .package(url: "https://github.com/apple/swift-atomics.git", from: "1.2.0")
     ],
