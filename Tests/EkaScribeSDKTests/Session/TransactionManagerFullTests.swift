@@ -5,6 +5,7 @@ final class TransactionManagerFullTests: XCTestCase {
     private var apiService: MockScribeAPIService!
     private var dataManager: MockDataManager!
     private var uploader: MockChunkUploader!
+    private var networkMonitor: MockNetworkMonitor!
     private var logger: MockLogger!
     private var sut: TransactionManager!
 
@@ -13,6 +14,7 @@ final class TransactionManagerFullTests: XCTestCase {
         apiService = MockScribeAPIService()
         dataManager = MockDataManager()
         uploader = MockChunkUploader()
+        networkMonitor = MockNetworkMonitor()
         logger = MockLogger()
         sut = TransactionManager(
             apiService: apiService,
@@ -22,6 +24,7 @@ final class TransactionManagerFullTests: XCTestCase {
             maxUploadRetries: 2,
             pollMaxRetries: 3,
             pollDelayMs: 10,
+            networkMonitor: networkMonitor,
             logger: logger
         )
     }
@@ -237,6 +240,7 @@ final class TransactionManagerFullTests: XCTestCase {
             maxUploadRetries: 2,
             pollMaxRetries: 5,
             pollDelayMs: 10,
+            networkMonitor: networkMonitor,
             logger: logger
         )
 
@@ -417,5 +421,33 @@ private final class SequentialMockAPI: ScribeAPIServiceProtocol {
         let result = callIndex < results.count ? results[callIndex] : results.last!
         callIndex += 1
         return result
+    }
+
+    func convertTransactionResult(_ sessionId: String, templateId: String) async -> NetworkResult<TemplateConversionResponse> {
+        .success(TemplateConversionResponse(message: nil, status: nil, error: nil), statusCode: 200)
+    }
+
+    func updateSession(_ sessionId: String, _ request: [UpdateSessionRequestItem]) async -> NetworkResult<UpdateSessionResponse> {
+        .success(UpdateSessionResponse(message: nil, status: nil, error: nil), statusCode: 200)
+    }
+
+    func getTemplates() async -> NetworkResult<TemplatesResponse> {
+        .success(TemplatesResponse(data: nil), statusCode: 200)
+    }
+
+    func updateTemplates(_ request: UpdateTemplatesRequest) async -> NetworkResult<UpdateTemplateResponse> {
+        .success(UpdateTemplateResponse(message: nil, status: nil, error: nil), statusCode: 200)
+    }
+
+    func getUserConfig() async -> NetworkResult<GetConfigResponse> {
+        .success(GetConfigResponse(data: nil), statusCode: 200)
+    }
+
+    func updateUserConfig(_ request: UpdateUserConfigRequest) async -> NetworkResult<UpdateUserConfigResponse> {
+        .success(UpdateUserConfigResponse(message: nil, status: nil, error: nil), statusCode: 200)
+    }
+
+    func getHistory(count: Int?) async -> NetworkResult<HistoryResponse> {
+        .success(HistoryResponse(data: nil), statusCode: 200)
     }
 }

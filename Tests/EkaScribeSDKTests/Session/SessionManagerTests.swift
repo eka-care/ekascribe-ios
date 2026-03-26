@@ -18,6 +18,7 @@ final class SessionManagerTests: XCTestCase {
         super.setUp()
         config = EkaScribeConfig(
             environment: .production,
+            clientInfo: ScribeClientInfo(clientId: "test-client"),
             tokenStorage: MockTokenStorage(),
             debugMode: true
         )

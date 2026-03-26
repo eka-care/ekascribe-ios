@@ -281,6 +281,34 @@ final class MockScribeAPIService: ScribeAPIServiceProtocol {
         getResultCallCount += 1
         return getResultResult
     }
+
+    func convertTransactionResult(_ sessionId: String, templateId: String) async -> NetworkResult<TemplateConversionResponse> {
+        .success(TemplateConversionResponse(message: nil, status: nil, error: nil), statusCode: 200)
+    }
+
+    func updateSession(_ sessionId: String, _ request: [UpdateSessionRequestItem]) async -> NetworkResult<UpdateSessionResponse> {
+        .success(UpdateSessionResponse(message: nil, status: nil, error: nil), statusCode: 200)
+    }
+
+    func getTemplates() async -> NetworkResult<TemplatesResponse> {
+        .success(TemplatesResponse(data: nil), statusCode: 200)
+    }
+
+    func updateTemplates(_ request: UpdateTemplatesRequest) async -> NetworkResult<UpdateTemplateResponse> {
+        .success(UpdateTemplateResponse(message: nil, status: nil, error: nil), statusCode: 200)
+    }
+
+    func getUserConfig() async -> NetworkResult<GetConfigResponse> {
+        .success(GetConfigResponse(data: nil), statusCode: 200)
+    }
+
+    func updateUserConfig(_ request: UpdateUserConfigRequest) async -> NetworkResult<UpdateUserConfigResponse> {
+        .success(UpdateUserConfigResponse(message: nil, status: nil, error: nil), statusCode: 200)
+    }
+
+    func getHistory(count: Int?) async -> NetworkResult<HistoryResponse> {
+        .success(HistoryResponse(data: nil), statusCode: 200)
+    }
 }
 
 // MARK: - MockTransactionManager
@@ -470,6 +498,12 @@ final class MockTokenStorage: EkaScribeTokenStorage {
     func onSessionExpired() {
         sessionExpiredCalled = true
     }
+}
+
+// MARK: - MockNetworkMonitor
+
+final class MockNetworkMonitor: NetworkMonitoring, @unchecked Sendable {
+    var isConnected: Bool = true
 }
 
 // MARK: - Test Helpers

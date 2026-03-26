@@ -12,6 +12,7 @@ public final class EkaScribe: @unchecked Sendable {
     private var networkClient: ScribeNetworkClient?
     private var apiService: ScribeAPIServiceProtocol?
     private var modelDownloader: ModelDownloader?
+    private var networkMonitor: NetworkMonitor?
     private var isInitialized = false
     private var config: EkaScribeConfig?
     private var cancellables: Set<AnyCancellable> = []
@@ -45,6 +46,8 @@ public final class EkaScribe: @unchecked Sendable {
         )
         let apiService = ScribeAPIService(networkClient: networkClient)
 
+        let networkMonitor = NetworkMonitor()
+
         let credentialProvider = S3CredentialProvider(
             credentialsURL: config.credentialsURL,
             networkClient: networkClient,
@@ -54,6 +57,7 @@ public final class EkaScribe: @unchecked Sendable {
             credentialProvider: credentialProvider,
             bucketName: config.bucketName,
             maxRetryCount: config.maxUploadRetries,
+            networkMonitor: networkMonitor,
             logger: logger
         )
 
@@ -83,6 +87,7 @@ public final class EkaScribe: @unchecked Sendable {
             maxUploadRetries: config.maxUploadRetries,
             pollMaxRetries: config.pollMaxRetries,
             pollDelayMs: config.pollDelayMs,
+            networkMonitor: networkMonitor,
             logger: logger
         )
 
@@ -98,6 +103,7 @@ public final class EkaScribe: @unchecked Sendable {
         sessionManager.setDelegate(delegate)
 
         self.config = config
+        self.networkMonitor = networkMonitor
         self.sessionManager = sessionManager
         self.transactionManager = transactionManager
         self.dataManager = dataManager
@@ -419,6 +425,7 @@ public final class EkaScribe: @unchecked Sendable {
         networkClient = nil
         apiService = nil
         modelDownloader = nil
+        networkMonitor = nil
         config = nil
         isInitialized = false
         cancellables.removeAll()

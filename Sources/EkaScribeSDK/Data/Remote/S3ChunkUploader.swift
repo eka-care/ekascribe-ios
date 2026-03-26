@@ -7,13 +7,15 @@ final class S3ChunkUploader: ChunkUploader, @unchecked Sendable {
     private let credentialProvider: S3CredentialProvider
     private let bucketName: String
     private let maxRetryCount: Int
+    private let networkMonitor: NetworkMonitoring
     private let logger: Logger
     private let inFlightTracker = InFlightTracker()
 
-    init(credentialProvider: S3CredentialProvider, bucketName: String, maxRetryCount: Int, logger: Logger) {
+    init(credentialProvider: S3CredentialProvider, bucketName: String, maxRetryCount: Int, networkMonitor: NetworkMonitoring, logger: Logger) {
         self.credentialProvider = credentialProvider
         self.bucketName = bucketName
         self.maxRetryCount = maxRetryCount
+        self.networkMonitor = networkMonitor
         self.logger = logger
     }
 
@@ -51,6 +53,11 @@ final class S3ChunkUploader: ChunkUploader, @unchecked Sendable {
         let key = "\(metadata.folderName)/\(metadata.sessionId)/\(metadata.fileName)"
 
         for attempt in 0...maxRetryCount {
+            guard isNetworkAvailable() else {
+                logger.warn("S3Uploader", "Network lost during retry attempt \(attempt)")
+                return .failure(error: "Network unavailable", isRetryable: true)
+            }
+
             // Get credentials (cached on first attempt, refreshed on retry)
             let creds = attempt == 0
                 ? await credentialProvider.getCredentials()
@@ -171,10 +178,7 @@ final class S3ChunkUploader: ChunkUploader, @unchecked Sendable {
     }
 
     private func isNetworkAvailable() -> Bool {
-        // Semaphores + NWPathMonitor often deadlock in Swift concurrency.
-        // For synchronous checks, it is safer to return true and let the URLSession fail natively,
-        // or keep an active monitor at the class level. Here, we assume true to prevent blocking.
-        return true
+        networkMonitor.isConnected
     }
 }
 

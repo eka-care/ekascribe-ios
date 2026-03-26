@@ -8,6 +8,7 @@ final class TransactionManager: TransactionManaging {
     private let maxUploadRetries: Int
     private let pollMaxRetries: Int
     private let pollDelayMs: Int
+    private let networkMonitor: NetworkMonitoring
     private let logger: Logger
 
     init(
@@ -18,6 +19,7 @@ final class TransactionManager: TransactionManaging {
         maxUploadRetries: Int,
         pollMaxRetries: Int,
         pollDelayMs: Int,
+        networkMonitor: NetworkMonitoring,
         logger: Logger
     ) {
         self.apiService = apiService
@@ -27,6 +29,7 @@ final class TransactionManager: TransactionManaging {
         self.maxUploadRetries = maxUploadRetries
         self.pollMaxRetries = pollMaxRetries
         self.pollDelayMs = pollDelayMs
+        self.networkMonitor = networkMonitor
         self.logger = logger
     }
 
@@ -160,6 +163,11 @@ final class TransactionManager: TransactionManaging {
 
     func retryFailedUploads(sessionId: String) async -> Bool {
         await chunkUploader.clearCache()
+
+        guard networkMonitor.isConnected else {
+            logger.warn("Txn", "Network unavailable — skipping upload retry for session \(sessionId)")
+            return false
+        }
 
         guard let allChunks = try? await dataManager.getAllChunks(sessionId: sessionId) else {
             return false

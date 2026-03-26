@@ -5,6 +5,7 @@ final class TransactionManagerEdgeCaseTests: XCTestCase {
     private var apiService: MockScribeAPIService!
     private var dataManager: MockDataManager!
     private var uploader: MockChunkUploader!
+    private var networkMonitor: MockNetworkMonitor!
     private var logger: MockLogger!
     private var sut: TransactionManager!
 
@@ -13,6 +14,7 @@ final class TransactionManagerEdgeCaseTests: XCTestCase {
         apiService = MockScribeAPIService()
         dataManager = MockDataManager()
         uploader = MockChunkUploader()
+        networkMonitor = MockNetworkMonitor()
         logger = MockLogger()
         sut = TransactionManager(
             apiService: apiService,
@@ -22,6 +24,7 @@ final class TransactionManagerEdgeCaseTests: XCTestCase {
             maxUploadRetries: 2,
             pollMaxRetries: 3,
             pollDelayMs: 10,
+            networkMonitor: networkMonitor,
             logger: logger
         )
     }
@@ -205,6 +208,18 @@ final class TransactionManagerEdgeCaseTests: XCTestCase {
         let result = await sut.retryFailedUploads(sessionId: "nonexistent")
 
         XCTAssertTrue(result)
+    }
+
+    func testRetryFailedUploadsOfflineReturnsFalse() async {
+        saveSession("s1", stage: TransactionStage.stop.rawValue)
+        saveChunk("c1", sessionId: "s1", index: 0, state: UploadState.failed.rawValue)
+
+        networkMonitor.isConnected = false
+
+        let result = await sut.retryFailedUploads(sessionId: "s1")
+
+        XCTAssertFalse(result)
+        XCTAssertEqual(uploader.uploadCallCount, 0)
     }
 
     func testRetryFailedUploadsPartialSuccess() async {
