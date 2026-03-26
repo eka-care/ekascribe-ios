@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(git -C /Users/divyeshnileshbhai/Desktop/Scribe tag -l)",
+      "Bash(git -C /Users/divyeshnileshbhai/Desktop/Scribe remote -v)",
+      "Bash(git -C /Users/divyeshnileshbhai/Desktop/Scribe diff --stat HEAD)",
+      "Bash(git -C /Users/divyeshnileshbhai/Desktop/Scribe status --short)",
+      "Bash(git -C /Users/divyeshnileshbhai/Desktop/Scribe log --oneline -10)",
+      "Bash(git -C /Users/divyeshnileshbhai/Desktop/Scribe ls-files:*)",
+      "Bash(git rm:*)",
+      "Bash(swift build:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(gh repo view:*)"
+    ]
+  }
+}
