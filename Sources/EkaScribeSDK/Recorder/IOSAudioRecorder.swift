@@ -162,6 +162,50 @@ final class IOSAudioRecorder: AudioRecorder {
 
     func resume() {
         isPaused = false
+
+        #if os(iOS)
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            logger.error("Recorder", "Failed to reactivate AVAudioSession on resume", error)
+            return
+        }
+        #endif
+
+        let input = engine.inputNode
+        let newHwFormat = input.inputFormat(forBus: 0)
+
+        guard newHwFormat.sampleRate > 0, newHwFormat.channelCount > 0 else {
+            logger.warn("Recorder", "Invalid hardware format on resume: \(newHwFormat)")
+            return
+        }
+
+        if let tgtFormat = targetFormat {
+            let needsConversion = newHwFormat.sampleRate != tgtFormat.sampleRate
+                || newHwFormat.channelCount != tgtFormat.channelCount
+
+            if needsConversion {
+                converter = AVAudioConverter(from: newHwFormat, to: tgtFormat)
+                if convertedBuffer == nil {
+                    convertedBuffer = AVAudioPCMBuffer(pcmFormat: tgtFormat, frameCapacity: 4096)
+                }
+            } else {
+                converter = nil
+                convertedBuffer = nil
+            }
+        }
+
+        installAudioTap()
+
+        if !engine.isRunning {
+            do {
+                engine.prepare()
+                try engine.start()
+                logger.info("Recorder", "Audio engine restarted on resume")
+            } catch {
+                logger.error("Recorder", "Failed to restart audio engine on resume", error)
+            }
+        }
     }
 
     #if os(iOS)
