@@ -129,7 +129,19 @@ final class SessionManager: @unchecked Sendable {
                 self?.eventEmitter?.emit(name, type, message, metadata)
             }
         )
-        pipeline?.start()
+
+        do {
+            try pipeline?.start()
+        } catch {
+            transition(to: .error)
+            let scribeError = ScribeError(code: .recorderSetupFailed, message: "Recorder setup failed: \(error.localizedDescription)")
+            delegate?.scribe(EkaScribe.shared, didFailWithError: scribeError)
+            onError(scribeError)
+            eventEmitter?.emit(.recorderSetupFailed, .error, scribeError.message)
+            cleanup()
+            return
+        }
+
         startFlowCollection()
 
         transition(to: .recording)
@@ -177,7 +189,12 @@ final class SessionManager: @unchecked Sendable {
             self.transition(to: .processing)
 
             self.eventEmitter?.emit(.uploadRetryStarted, .info, "Retrying uploads")
-            let allUploaded = await self.transactionManager.retryFailedUploads(sessionId: sessionId)
+            let allUploaded = await self.transactionManager.retryFailedUploads(
+                sessionId: sessionId,
+                onChunkEvent: { [weak self] name, type, message, metadata in
+                    self?.eventEmitter?.emit(name, type, message, metadata)
+                }
+            )
             self.eventEmitter?.emit(
                 .uploadRetryCompleted,
                 allUploaded ? .success : .error,
@@ -217,13 +234,18 @@ final class SessionManager: @unchecked Sendable {
 
             switch await self.transactionManager.pollResult(sessionId: sessionId) {
             case .success(let response):
+                self.eventEmitter?.emit(.pollResultSuccess, .success, "Poll result received successfully")
                 try? await self.dataManager.updateSessionState(sessionId, SessionState.completed.rawValue)
                 self.transition(to: .completed)
                 let result = Self.mapToSessionResult(sessionId: sessionId, response)
+                self.eventEmitter?.emit(.sessionResultReceived, .success, "Session result received", [
+                    "templateCount": "\(result.templates.count)"
+                ])
                 self.eventEmitter?.emit(.sessionCompleted, .success, "Session completed")
                 self.delegate?.scribe(EkaScribe.shared, didCompleteSession: sessionId, result: result)
 
             case .failed(let error):
+                self.eventEmitter?.emit(.pollResultFailed, .error, "Poll result failed: \(error)")
                 self.handleError(sessionId: sessionId, code: .transcriptionFailed, message: error)
 
             case .timeout:

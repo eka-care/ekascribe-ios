@@ -210,8 +210,12 @@ final class MockAudioRecorder: AudioRecorder {
     var stopCalled = false
     var pauseCalled = false
     var resumeCalled = false
+    var startError: Error?
 
-    func start() { startCalled = true }
+    func start() throws {
+        startCalled = true
+        if let startError { throw startError }
+    }
     func stop() { stopCalled = true }
     func pause() { pauseCalled = true }
     func resume() { resumeCalled = true }
@@ -331,7 +335,7 @@ final class MockTransactionManager: TransactionManaging {
         return initResult
     }
 
-    func retryFailedUploads(sessionId: String) async -> Bool {
+    func retryFailedUploads(sessionId: String, onChunkEvent: ((SessionEventName, EventType, String, [String: String]) -> Void)? = nil) async -> Bool {
         retryCallCount += 1
         return retryResult
     }
@@ -362,6 +366,7 @@ final class MockPipeline: PipelineProtocol {
     var stopCalled = false
     var cancelCalled = false
     var stopResult: FullAudioResult?
+    var startError: Error?
 
     let audioFocusSubject = CurrentValueSubject<Bool, Never>(true)
     let audioQualitySubject = PassthroughSubject<AudioQualityMetrics, Never>()
@@ -371,7 +376,10 @@ final class MockPipeline: PipelineProtocol {
     var audioQualityFlow: AnyPublisher<AudioQualityMetrics, Never> { audioQualitySubject.eraseToAnyPublisher() }
     var voiceActivityFlow: AnyPublisher<VoiceActivityData, Never> { voiceActivitySubject.eraseToAnyPublisher() }
 
-    func start() { startCalled = true }
+    func start() throws {
+        startCalled = true
+        if let startError { throw startError }
+    }
     func startCoroutines() { startCoroutinesCalled = true }
     func pause() { pauseCalled = true }
     func resume() { resumeCalled = true }

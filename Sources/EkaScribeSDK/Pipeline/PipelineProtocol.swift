@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 protocol PipelineProtocol: AnyObject {
-    func start()
+    func start() throws
     func startCoroutines()
     func pause()
     func resume()

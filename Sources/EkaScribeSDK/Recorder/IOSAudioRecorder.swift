@@ -23,52 +23,46 @@ final class IOSAudioRecorder: AudioRecorder {
         self.logger = logger
     }
 
-    func start() {
-        do {
-            #if os(iOS)
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement)
-            try session.setPreferredSampleRate(Double(config.sampleRate))
-            try session.setActive(true)
-            registerObservers()
-            #endif
+    func start() throws {
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.record, mode: .measurement)
+        try session.setPreferredSampleRate(Double(config.sampleRate))
+        try session.setActive(true)
+        registerObservers()
+        #endif
 
-            let input = engine.inputNode
-            let hwFormat = input.inputFormat(forBus: 0)
+        let input = engine.inputNode
+        let hwFormat = input.inputFormat(forBus: 0)
 
-            // Target format: 16kHz mono Float32
-            guard let tgtFormat = AVAudioFormat(
-                commonFormat: .pcmFormatFloat32,
-                sampleRate: Double(config.sampleRate),
-                channels: 1,
-                interleaved: false
-            ) else {
-                logger.error("Recorder", "Failed to create target audio format")
-                return
-            }
-            targetFormat = tgtFormat
-
-            let needsConversion = hwFormat.sampleRate != tgtFormat.sampleRate
-                || hwFormat.channelCount != tgtFormat.channelCount
-
-            if needsConversion {
-                converter = AVAudioConverter(from: hwFormat, to: tgtFormat)
-                guard converter != nil else {
-                    logger.error("Recorder", "Failed to create AVAudioConverter from \(hwFormat) to \(tgtFormat)")
-                    return
-                }
-                // Pre-allocate output buffer with generous capacity (reused every callback)
-                let maxOutputFrames: AVAudioFrameCount = 4096
-                convertedBuffer = AVAudioPCMBuffer(pcmFormat: tgtFormat, frameCapacity: maxOutputFrames)
-            }
-
-            installAudioTap()
-            engine.prepare()
-            try engine.start()
-            logger.info("Recorder", "Started recording: hw=\(hwFormat.sampleRate)Hz → target=\(config.sampleRate)Hz, needsConversion=\(needsConversion)")
-        } catch {
-            logger.error("Recorder", "Failed to start recorder", error)
+        // Target format: 16kHz mono Float32
+        guard let tgtFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: Double(config.sampleRate),
+            channels: 1,
+            interleaved: false
+        ) else {
+            throw ScribeException(code: .recorderSetupFailed, message: "Failed to create target audio format")
         }
+        targetFormat = tgtFormat
+
+        let needsConversion = hwFormat.sampleRate != tgtFormat.sampleRate
+            || hwFormat.channelCount != tgtFormat.channelCount
+
+        if needsConversion {
+            converter = AVAudioConverter(from: hwFormat, to: tgtFormat)
+            guard converter != nil else {
+                throw ScribeException(code: .recorderSetupFailed, message: "Failed to create AVAudioConverter from \(hwFormat) to \(tgtFormat)")
+            }
+            // Pre-allocate output buffer with generous capacity (reused every callback)
+            let maxOutputFrames: AVAudioFrameCount = 4096
+            convertedBuffer = AVAudioPCMBuffer(pcmFormat: tgtFormat, frameCapacity: maxOutputFrames)
+        }
+
+        installAudioTap()
+        engine.prepare()
+        try engine.start()
+        logger.info("Recorder", "Started recording: hw=\(hwFormat.sampleRate)Hz → target=\(config.sampleRate)Hz, needsConversion=\(needsConversion)")
     }
 
     private func installAudioTap() {

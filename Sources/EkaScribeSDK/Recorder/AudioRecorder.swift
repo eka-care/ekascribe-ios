@@ -1,7 +1,7 @@
 import Foundation
 
 protocol AudioRecorder {
-    func start()
+    func start() throws
     func stop()
     func pause()
     func resume()

@@ -161,7 +161,7 @@ final class TransactionManager: TransactionManaging {
         return .timeout
     }
 
-    func retryFailedUploads(sessionId: String) async -> Bool {
+    func retryFailedUploads(sessionId: String, onChunkEvent: ((SessionEventName, EventType, String, [String: String]) -> Void)? = nil) async -> Bool {
         await chunkUploader.clearCache()
 
         guard networkMonitor.isConnected else {
@@ -192,6 +192,11 @@ final class TransactionManager: TransactionManaging {
                 continue
             }
 
+            onChunkEvent?(.chunkRetryStarted, .info, "Retrying chunk upload", [
+                "chunkId": chunk.chunkId,
+                "chunkIndex": "\(chunk.chunkIndex)"
+            ])
+
             try? await dataManager.markInProgress(chunk.chunkId)
 
             let metadata = UploadMetadata(
@@ -207,9 +212,18 @@ final class TransactionManager: TransactionManaging {
             case .success:
                 try? await dataManager.markUploaded(chunk.chunkId)
                 deleteFile(file, logger: logger)
+                onChunkEvent?(.chunkRetrySuccess, .success, "Chunk retry upload succeeded", [
+                    "chunkId": chunk.chunkId,
+                    "chunkIndex": "\(chunk.chunkIndex)"
+                ])
 
-            case .failure:
+            case .failure(let error, _):
                 try? await dataManager.markFailed(chunk.chunkId)
+                onChunkEvent?(.chunkRetryFailed, .error, "Chunk retry upload failed: \(error)", [
+                    "chunkId": chunk.chunkId,
+                    "chunkIndex": "\(chunk.chunkIndex)",
+                    "error": error
+                ])
             }
         }
 
@@ -238,7 +252,7 @@ final class TransactionManager: TransactionManaging {
             return result
 
         case .stop:
-            let allUploaded = await retryFailedUploads(sessionId: sessionId)
+            let allUploaded = await retryFailedUploads(sessionId: sessionId, onChunkEvent: nil)
             if !allUploaded && !force {
                 return .error(message: "Not all chunks uploaded. Use forceCommit=true.")
             }

@@ -68,9 +68,9 @@ final class PipelineTests: XCTestCase {
 
     // MARK: - start() tests
 
-    func testStartSetsRecorderCallbacksAndStarts() {
+    func testStartSetsRecorderCallbacksAndStarts() throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
 
         XCTAssertTrue(recorder.startCalled)
         XCTAssertNotNil(recorder.onFrame)
@@ -85,9 +85,9 @@ final class PipelineTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: pcmPath))
     }
 
-    func testOnFrameWritesToPreBuffer() {
+    func testOnFrameWritesToPreBuffer() throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
 
         let frame = makeFrame(timestampMs: 100)
         recorder.onFrame?(frame)
@@ -97,9 +97,9 @@ final class PipelineTests: XCTestCase {
         XCTAssertEqual(drained[0].timestampMs, 100)
     }
 
-    func testAudioFocusChangedPublishesValue() {
+    func testAudioFocusChangedPublishesValue() throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
 
         let expectation = expectation(description: "focus lost")
         var receivedValue: Bool?
@@ -287,9 +287,9 @@ final class PipelineTests: XCTestCase {
 
     // MARK: - pause/resume
 
-    func testPauseAndResume() {
+    func testPauseAndResume() throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
 
         pipeline.pause()
         XCTAssertTrue(recorder.pauseCalled)

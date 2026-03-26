@@ -46,9 +46,14 @@ public enum SessionEventName: String, Sendable {
     case modelDownloadFailed
     case modelDownloadCached
     case pipelineStopped
+    case chunkEncoded
+    case chunkUploadStarted
     case chunkUploaded
     case chunkUploadFailed
     case chunkProcessingFailed
+    case chunkRetryStarted
+    case chunkRetrySuccess
+    case chunkRetryFailed
     case uploadRetryStarted
     case uploadRetryCompleted
     case initTransactionSuccess
@@ -57,8 +62,11 @@ public enum SessionEventName: String, Sendable {
     case stopTransactionFailed
     case commitTransactionSuccess
     case commitTransactionFailed
+    case pollResultSuccess
     case pollResultFailed
     case pollResultTimeout
+    case sessionResultReceived
+    case recorderSetupFailed
     case fullAudioGenerated
     case fullAudioGenerationFailed
     case fullAudioUploaded

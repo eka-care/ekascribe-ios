@@ -87,7 +87,7 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
         self.rawPcmFilePath = outputDir.appendingPathComponent("\(sessionId)_raw.pcm").path
     }
 
-    func start() {
+    func start() throws {
         recorder.onFrame = { [weak self] frame in
             guard let self else { return }
             if !preBuffer.write(frame) { //guard
@@ -99,7 +99,7 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
             self?.audioFocusSubject.send(hasFocus)
         }
 
-        recorder.start()
+        try recorder.start()
     }
 
     func startCoroutines() {
@@ -202,6 +202,11 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
                     let outputPath = outputDir.appendingPathComponent("\(sessionId)_\(chunk.index + 1).m4a").path
                     let sampleRate = chunk.frames.first?.sampleRate ?? 16_000
                     let encoded = try await encoder.encode(frames: chunk.frames, sampleRate: sampleRate, outputPath: outputPath)
+                    self.onEvent?(.chunkEncoded, .success, "Chunk encoded", [
+                        "chunkId": chunk.chunkId,
+                        "chunkIndex": "\(chunk.index)",
+                        "filePath": encoded.filePath
+                    ])
 
                     let fileName = "\(chunk.index + 1).\(encoded.format.fileExtension)"
 
@@ -233,6 +238,11 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
                         bid: self.bid,
                         mimeType: encoded.format.mimeType
                     )
+
+                    self.onEvent?(.chunkUploadStarted, .info, "Chunk upload started", [
+                        "chunkId": chunk.chunkId,
+                        "chunkIndex": "\(chunk.index)"
+                    ])
 
                     switch await self.chunkUploader.upload(file: file, metadata: metadata) {
                     case .success:

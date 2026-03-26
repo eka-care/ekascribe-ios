@@ -67,9 +67,9 @@ final class PipelineEdgeCaseTests: XCTestCase {
 
     // MARK: - Edge Case Tests
 
-    func testPauseAndResumeMultipleCycles() {
+    func testPauseAndResumeMultipleCycles() throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
 
         for _ in 0..<5 {
             pipeline.pause()
@@ -79,18 +79,18 @@ final class PipelineEdgeCaseTests: XCTestCase {
         }
     }
 
-    func testStartSetsRecorderCallbacks() {
+    func testStartSetsRecorderCallbacks() throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
 
         XCTAssertTrue(recorder.startCalled)
         XCTAssertNotNil(recorder.onFrame)
         XCTAssertNotNil(recorder.onAudioFocusChanged)
     }
 
-    func testOnFrameWritesToPreBuffer() async {
+    func testOnFrameWritesToPreBuffer() async throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
 
         let frame = makeFrame(timestampMs: 100)
         recorder.onFrame?(frame)
@@ -102,9 +102,9 @@ final class PipelineEdgeCaseTests: XCTestCase {
         XCTAssertTrue(true)
     }
 
-    func testAudioFocusChangedPublishesValue() async {
+    func testAudioFocusChangedPublishesValue() async throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
 
         let expectation = XCTestExpectation(description: "Focus changed")
         var receivedFocus: Bool?
@@ -120,18 +120,18 @@ final class PipelineEdgeCaseTests: XCTestCase {
         cancellable.cancel()
     }
 
-    func testStopBeforeStartCoroutinesDoesNotCrash() async {
+    func testStopBeforeStartCoroutinesDoesNotCrash() async throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
         // Stop immediately without starting coroutines
         _ = await pipeline.stop()
         // Should complete gracefully
         XCTAssertTrue(recorder.stopCalled)
     }
 
-    func testMultipleFramesProcessed() async {
+    func testMultipleFramesProcessed() async throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
 
         // Send multiple frames rapidly
         for i in 0..<100 {
@@ -152,9 +152,9 @@ final class PipelineEdgeCaseTests: XCTestCase {
         XCTAssertTrue(recorder.pauseCalled)
     }
 
-    func testResumeBeforePause() {
+    func testResumeBeforePause() throws {
         let (pipeline, _, _) = makePipeline()
-        pipeline.start()
+        try pipeline.start()
         // Resume without prior pause should not crash
         pipeline.resume()
         XCTAssertTrue(recorder.resumeCalled)

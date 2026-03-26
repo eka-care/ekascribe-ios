@@ -15,6 +15,7 @@ public enum ErrorCode: String, Codable, Sendable {
     case commitTransactionFailed
     case pollTimeout
     case transcriptionFailed
+    case recorderSetupFailed
     case retryExhausted
     case unknown
 }
