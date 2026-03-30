@@ -208,7 +208,7 @@ public final class EkaScribe: @unchecked Sendable {
         switch await api.getTransactionResult(sessionId) {
         case .success(let response, _):
             return .success(SessionManager.mapToSessionResult(sessionId: sessionId, response))
-        case .serverError(_, let message):
+        case .serverError(_, let message, _):
             return .failure(ScribeException(code: .transcriptionFailed, message: message))
         case .networkError(let error), .unknownError(let error):
             return .failure(error)
@@ -250,7 +250,7 @@ public final class EkaScribe: @unchecked Sendable {
         switch await api.convertTransactionResult(sessionId, templateId: templateId) {
         case .success:
             return .success(true)
-        case .serverError(_, let message):
+        case .serverError(_, let message, _):
             return .failure(ScribeException(code: .unknown, message: message))
         case .networkError(let error), .unknownError(let error):
             return .failure(error)
@@ -269,7 +269,7 @@ public final class EkaScribe: @unchecked Sendable {
         switch await api.updateSession(sessionId, request) {
         case .success:
             return .success(true)
-        case .serverError(_, let message):
+        case .serverError(_, let message, _):
             return .failure(ScribeException(code: .unknown, message: message))
         case .networkError(let error), .unknownError(let error):
             return .failure(error)
@@ -299,7 +299,7 @@ public final class EkaScribe: @unchecked Sendable {
             } ?? []
             return .success(items)
 
-        case .serverError(_, let message):
+        case .serverError(_, let message, _):
             return .failure(ScribeException(code: .unknown, message: message))
 
         case .networkError(let error), .unknownError(let error):
@@ -319,7 +319,7 @@ public final class EkaScribe: @unchecked Sendable {
         switch await api.updateTemplates(request) {
         case .success:
             return .success(())
-        case .serverError(_, let message):
+        case .serverError(_, let message, _):
             return .failure(ScribeException(code: .unknown, message: message))
         case .networkError(let error), .unknownError(let error):
             return .failure(error)
@@ -341,7 +341,7 @@ public final class EkaScribe: @unchecked Sendable {
             }
             return .success(config)
 
-        case .serverError(_, let message):
+        case .serverError(_, let message, _):
             return .failure(ScribeException(code: .unknown, message: message))
 
         case .networkError(let error), .unknownError(let error):
@@ -369,7 +369,7 @@ public final class EkaScribe: @unchecked Sendable {
         switch await api.updateUserConfig(request) {
         case .success:
             return .success(true)
-        case .serverError(_, let message):
+        case .serverError(_, let message, _):
             return .failure(ScribeException(code: .unknown, message: message))
         case .networkError(let error), .unknownError(let error):
             return .failure(error)

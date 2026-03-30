@@ -74,9 +74,9 @@ final class ScribeNetworkClient: @unchecked Sendable {
                 return .networkError(afError)
             }
             if let data = response.data {
-                let message = extractErrorMessage(data: data)
-                    ?? HTTPURLResponse.localizedString(forStatusCode: statusCode)
-                return .serverError(statusCode: statusCode, message: message)
+                let info = extractErrorInfo(data: data)
+                let message = info.message ?? HTTPURLResponse.localizedString(forStatusCode: statusCode)
+                return .serverError(statusCode: statusCode, message: message, errorCode: info.errorCode)
             }
             return .unknownError(afError)
         }
@@ -98,18 +98,26 @@ final class ScribeNetworkClient: @unchecked Sendable {
                 return .networkError(afError)
             }
             if let data = response.data {
-                let message = extractErrorMessage(data: data)
-                    ?? HTTPURLResponse.localizedString(forStatusCode: statusCode)
-                return .serverError(statusCode: statusCode, message: message)
+                let info = extractErrorInfo(data: data)
+                let message = info.message ?? HTTPURLResponse.localizedString(forStatusCode: statusCode)
+                return .serverError(statusCode: statusCode, message: message, errorCode: info.errorCode)
             }
             return .unknownError(afError)
         }
     }
 
-    private func extractErrorMessage(data: Data) -> String? {
-        if let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            return payload["message"] as? String
+    private func extractErrorInfo(data: Data) -> (message: String?, errorCode: String?) {
+        guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return (nil, nil)
         }
-        return nil
+        if let topMessage = payload["message"] as? String {
+            return (topMessage, nil)
+        }
+        if let errorObj = payload["error"] as? [String: Any] {
+            let message = errorObj["display_message"] as? String ?? errorObj["message"] as? String
+            let code = errorObj["code"] as? String
+            return (message, code)
+        }
+        return (nil, nil)
     }
 }

@@ -50,7 +50,7 @@ actor S3CredentialProvider {
             }
             return S3Credentials(accessKey: access, secretKey: secret, sessionToken: sessionToken)
 
-        case .serverError(let statusCode, let message):
+        case .serverError(let statusCode, let message, _):
             logger.error("S3Credentials", "Credential fetch failed (status: \(statusCode)): \(message)")
             return nil
 

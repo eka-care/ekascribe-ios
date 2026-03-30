@@ -114,7 +114,7 @@ final class TransactionManagerEdgeCaseTests: XCTestCase {
 
         let result = await sut.checkAndProgress(sessionId: "s1")
 
-        if case .error(let message) = result {
+        if case .error(let message, _) = result {
             XCTAssertTrue(message.contains("failed") || message.contains("Poll timeout"))
         } else {
             XCTFail("Expected error")
@@ -129,7 +129,7 @@ final class TransactionManagerEdgeCaseTests: XCTestCase {
 
         let result = await sut.checkAndProgress(sessionId: "s1")
 
-        if case .error(let message) = result {
+        if case .error(let message, _) = result {
             XCTAssertEqual(message, "Poll timeout")
         } else {
             XCTFail("Expected timeout error")
@@ -172,7 +172,7 @@ final class TransactionManagerEdgeCaseTests: XCTestCase {
 
         let result = await sut.checkAndProgress(sessionId: "s1")
 
-        if case .error(let message) = result {
+        if case .error(let message, _) = result {
             XCTAssertEqual(message, "Unknown stage")
         } else {
             XCTFail("Expected unknown stage error")

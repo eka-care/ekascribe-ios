@@ -17,5 +17,6 @@ public enum ErrorCode: String, Codable, Sendable {
     case transcriptionFailed
     case recorderSetupFailed
     case retryExhausted
+    case txnLimitReached
     case unknown
 }

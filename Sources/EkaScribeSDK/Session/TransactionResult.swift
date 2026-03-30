@@ -2,7 +2,7 @@ import Foundation
 
 public enum TransactionResult {
     case success(folderName: String = "", bid: String = "")
-    case error(message: String)
+    case error(message: String, code: ErrorCode? = nil)
 }
 
 enum TransactionPollResult {

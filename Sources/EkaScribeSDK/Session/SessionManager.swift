@@ -107,12 +107,15 @@ final class SessionManager: @unchecked Sendable {
         guard case .success(_, let bid) = initResult else {
             transition(to: .error)
             let message: String
-            if case .error(let errorMessage) = initResult {
+            let errorCode: ErrorCode
+            if case .error(let errorMessage, let code) = initResult {
                 message = errorMessage
+                errorCode = code ?? .initTransactionFailed
             } else {
                 message = "Init failed"
+                errorCode = .initTransactionFailed
             }
-            let error = ScribeError(code: .initTransactionFailed, message: message)
+            let error = ScribeError(code: errorCode, message: message)
             delegate?.scribe(EkaScribe.shared, didFailWithError: error)
             onError(error)
             eventEmitter?.emit(.initTransactionFailed, .error, message)
@@ -209,7 +212,7 @@ final class SessionManager: @unchecked Sendable {
             let stopResult = await self.transactionManager.stopTransaction(sessionId: sessionId)
             guard case .success = stopResult else {
                 let message: String
-                if case .error(let errorMessage) = stopResult {
+                if case .error(let errorMessage, _) = stopResult {
                     message = errorMessage
                 } else {
                     message = "Stop failed"
@@ -222,7 +225,7 @@ final class SessionManager: @unchecked Sendable {
             let commitResult = await self.transactionManager.commitTransaction(sessionId: sessionId)
             guard case .success = commitResult else {
                 let message: String
-                if case .error(let errorMessage) = commitResult {
+                if case .error(let errorMessage, _) = commitResult {
                     message = errorMessage
                 } else {
                     message = "Commit failed"

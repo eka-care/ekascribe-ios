@@ -62,8 +62,9 @@ final class TransactionManager: TransactionManaging {
             try? await dataManager.updateStageAndBid(sessionId, TransactionStage.stop.rawValue, bid)
             return .success(folderName: folderName, bid: bid)
 
-        case .serverError(_, let message):
-            return .error(message: message)
+        case .serverError(_, let message, let errorCode):
+            let mappedCode: ErrorCode? = (errorCode == "txn_limit_exceeded") ? .txnLimitReached : nil
+            return .error(message: message, code: mappedCode)
 
         case .networkError(let error):
             return .error(message: "Network error: \(error.localizedDescription)")
@@ -86,7 +87,7 @@ final class TransactionManager: TransactionManaging {
             try? await dataManager.updateUploadStage(sessionId, TransactionStage.commit.rawValue)
             return .success()
 
-        case .serverError(_, let message):
+        case .serverError(_, let message, _):
             return .error(message: message)
 
         case .networkError(let error):
@@ -107,7 +108,7 @@ final class TransactionManager: TransactionManaging {
             try? await dataManager.updateUploadStage(sessionId, TransactionStage.analyzing.rawValue)
             return .success()
 
-        case .serverError(_, let message):
+        case .serverError(_, let message, _):
             return .error(message: message)
 
         case .networkError(let error):
@@ -144,7 +145,7 @@ final class TransactionManager: TransactionManaging {
 
                 try? await Task.sleep(nanoseconds: UInt64(pollDelayMs) * 1_000_000)
 
-            case .serverError(_, let message):
+            case .serverError(_, let message, _):
                 logger.warn("Txn", "Poll server error: \(message)")
                 try? await Task.sleep(nanoseconds: UInt64(pollDelayMs) * 1_000_000)
 

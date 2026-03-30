@@ -88,7 +88,7 @@ final class TransactionManagerFullTests: XCTestCase {
         apiService.initResult = .serverError(statusCode: 500, message: "Internal error")
         let errorResult = await sut.initTransaction(sessionId: "s1", sessionConfig: SessionConfig(languages: ["en-IN"], mode: "dictation", modelType: "pro"), folderName: "240101")
 
-        if case .error(let msg) = errorResult {
+        if case .error(let msg, _) = errorResult {
             XCTAssertEqual(msg, "Internal error")
         } else {
             XCTFail("Expected error, got \(errorResult)")
@@ -101,7 +101,7 @@ final class TransactionManagerFullTests: XCTestCase {
 
         let result = await sut.initTransaction(sessionId: "s1", sessionConfig: SessionConfig(languages: ["en-IN"], mode: "dictation", modelType: "pro"), folderName: "240101")
 
-        if case .error(let msg) = result {
+        if case .error(let msg, _) = result {
             XCTAssertTrue(msg.hasPrefix("Network error:"))
         } else {
             XCTFail("Expected error")
@@ -128,7 +128,7 @@ final class TransactionManagerFullTests: XCTestCase {
 
         let result = await sut.stopTransaction(sessionId: "s1")
 
-        if case .error(let msg) = result {
+        if case .error(let msg, _) = result {
             XCTAssertEqual(msg, "stop failed")
         } else {
             XCTFail("Expected error")
@@ -155,7 +155,7 @@ final class TransactionManagerFullTests: XCTestCase {
 
         let result = await sut.commitTransaction(sessionId: "s1")
 
-        if case .error(let msg) = result {
+        if case .error(let msg, _) = result {
             XCTAssertEqual(msg, "commit failed")
         } else {
             XCTFail("Expected error")
@@ -369,7 +369,7 @@ final class TransactionManagerFullTests: XCTestCase {
     func testCheckAndProgressSessionNotFound() async {
         let result = await sut.checkAndProgress(sessionId: "nonexistent")
 
-        if case .error(let msg) = result {
+        if case .error(let msg, _) = result {
             XCTAssertEqual(msg, "Session not found")
         } else {
             XCTFail("Expected error")
@@ -391,7 +391,7 @@ final class TransactionManagerFullTests: XCTestCase {
 
         let result = await sut.checkAndProgress(sessionId: "s1", sessionConfig: nil)
 
-        if case .error(let msg) = result {
+        if case .error(let msg, _) = result {
             XCTAssertTrue(msg.contains("config"))
         } else {
             XCTFail("Expected error when no config provided for init stage")

@@ -77,7 +77,7 @@ final class UploadAndTransactionTests: XCTestCase {
 
     func testTransactionResultError() {
         let result = TransactionResult.error(message: "Network error")
-        if case .error(let message) = result {
+        if case .error(let message, _) = result {
             XCTAssertEqual(message, "Network error")
         } else {
             XCTFail("Expected error")
