@@ -19,6 +19,7 @@ final class AuthInterceptor: RequestInterceptor, @unchecked Sendable {
             self.refreshProvider = DefaultTokenProvider(
                 tokenStorage: tokenStorage,
                 refreshURL: refreshURL,
+                clientInfo: clientInfo,
                 logger: logger
             )
         } else {
@@ -79,12 +80,14 @@ final class AuthInterceptor: RequestInterceptor, @unchecked Sendable {
 actor DefaultTokenProvider {
     private let tokenStorage: any EkaScribeTokenStorage
     private let refreshURL: URL
+    private let clientInfo: ScribeClientInfo
     private let logger: Logger
     private let refreshSession = Session()
 
-    init(tokenStorage: any EkaScribeTokenStorage, refreshURL: URL, logger: Logger) {
+    init(tokenStorage: any EkaScribeTokenStorage, refreshURL: URL, clientInfo: ScribeClientInfo, logger: Logger) {
         self.tokenStorage = tokenStorage
         self.refreshURL = refreshURL
+        self.clientInfo = clientInfo
         self.logger = logger
     }
 
@@ -101,11 +104,17 @@ actor DefaultTokenProvider {
 
         let payload = AuthRefreshRequest(refresh: refreshToken, sessionToken: sessionToken)
 
+        let headers: HTTPHeaders = [
+            "client-id": clientInfo.clientId,
+            "flavour": clientInfo.flavour
+        ]
+
         let response = await refreshSession.request(
             refreshURL,
             method: .post,
             parameters: payload,
-            encoder: JSONParameterEncoder.default
+            encoder: JSONParameterEncoder.default,
+            headers: headers
         )
         .validate()
         .serializingDecodable(AuthRefreshResponse.self)
