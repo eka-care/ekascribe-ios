@@ -82,13 +82,14 @@ actor DefaultTokenProvider {
     private let refreshURL: URL
     private let clientInfo: ScribeClientInfo
     private let logger: Logger
-    private let refreshSession = Session()
+    private let refreshSession: Session
 
     init(tokenStorage: any EkaScribeTokenStorage, refreshURL: URL, clientInfo: ScribeClientInfo, logger: Logger) {
         self.tokenStorage = tokenStorage
         self.refreshURL = refreshURL
         self.clientInfo = clientInfo
         self.logger = logger
+        self.refreshSession = Session(eventMonitors: [APILogger(logger: logger)])
     }
 
     func refreshTokens() async -> String? {
@@ -105,7 +106,8 @@ actor DefaultTokenProvider {
         let payload = AuthRefreshRequest(refresh: refreshToken, sessionToken: sessionToken)
 
         let headers: HTTPHeaders = [
-            "client-id": clientInfo.clientId,
+            "Authorization": "Bearer \(sessionToken)",
+            "Client-Id": clientInfo.clientId,
             "flavour": clientInfo.flavour
         ]
 
