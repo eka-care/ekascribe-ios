@@ -26,6 +26,7 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
     private var chunkingTask: Task<Void, Never>?
     private var persistenceTask: Task<Void, Never>?
     private var qualityForwardTask: Task<Void, Never>?
+    private let uploadCoordinator: ChunkUploadCoordinator
 
     private let rawPcmFilePath: String
     private var rawPcmFileHandle: FileHandle?
@@ -85,6 +86,12 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
         self.chunkStream = chunkStream
         self.chunkContinuation = chunkContinuation
         self.rawPcmFilePath = outputDir.appendingPathComponent("\(sessionId)_raw.pcm").path
+        self.uploadCoordinator = ChunkUploadCoordinator(
+            uploader: chunkUploader,
+            dataManager: dataManager,
+            logger: logger,
+            onEvent: onEvent
+        )
     }
 
     func start() throws {
@@ -126,6 +133,9 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
         await frameProducer.stopAndDrain()
         await chunkingTask?.value
         await persistenceTask?.value
+        // Drain all inflight uploads spawned by the persistence loop so that
+        // the post-stop transaction observes a settled DB state.
+        await uploadCoordinator.drain()
         qualityForwardTask?.cancel()
 
         // Close the raw PCM file before encoding
@@ -154,6 +164,7 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
         chunkingTask?.cancel()
         persistenceTask?.cancel()
         qualityForwardTask?.cancel()
+        uploadCoordinator.cancelAll()
 
         // Close file handle
         rawPcmFileHandle?.closeFile()
@@ -194,6 +205,11 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
     }
 
     private func startPersistenceTask() {
+        // Producer loop: encode each chunk (fast, CPU-bound), persist its DB row,
+        // then hand the upload off to the coordinator. The coordinator runs
+        // uploads in parallel (capped by PipelineLimits.maxConcurrentUploads) on
+        // its own Tasks, so a slow upload does NOT stall this loop and does NOT
+        // delay encoding/persisting the next chunk.
         persistenceTask = Task { [weak self] in
             guard let self else { return }
             for await chunk in chunkStream {
@@ -225,8 +241,9 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
                         createdAt: self.timeProvider.nowMillis()
                     )
 
+                    // Durably persist the chunk record before handing off. If the
+                    // app dies right here, the retry sweep picks it up on next launch.
                     try await self.dataManager.saveChunk(entity)
-                    try await self.dataManager.markInProgress(chunk.chunkId)
 
                     let file = URL(fileURLWithPath: encoded.filePath)
                     let metadata = UploadMetadata(
@@ -239,27 +256,15 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
                         mimeType: encoded.format.mimeType
                     )
 
-                    self.onEvent?(.chunkUploadStarted, .info, "Chunk upload started", [
-                        "chunkId": chunk.chunkId,
-                        "chunkIndex": "\(chunk.index)"
-                    ])
-
-                    switch await self.chunkUploader.upload(file: file, metadata: metadata) {
-                    case .success:
-                        try await self.dataManager.markUploaded(chunk.chunkId)
-                        deleteFile(file, logger: self.logger)
-                        self.onEvent?(.chunkUploaded, .success, "Chunk uploaded", [
-                            "chunkId": chunk.chunkId,
-                            "chunkIndex": "\(chunk.index)"
-                        ])
-
-                    case .failure(let error, _):
-                        try await self.dataManager.markFailed(chunk.chunkId)
-                        self.onEvent?(.chunkUploadFailed, .error, "Chunk upload failed: \(error)", [
-                            "chunkId": chunk.chunkId,
-                            "error": error
-                        ])
-                    }
+                    // Fire-and-forget. Returns immediately; upload runs on a
+                    // detached Task that waits on the semaphore before hitting
+                    // the network.
+                    self.uploadCoordinator.submit(
+                        chunkId: chunk.chunkId,
+                        chunkIndex: chunk.index,
+                        file: file,
+                        metadata: metadata
+                    )
                 } catch {
                     self.logger.error("Pipeline", "Failed to process chunk: \(chunk.chunkId)", error)
                     self.onEvent?(.chunkProcessingFailed, .error, "Chunk processing failed: \(error.localizedDescription)", [
