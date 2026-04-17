@@ -186,49 +186,80 @@ final class TransactionManager: TransactionManaging {
         let folderName = session.folderName ?? ""
         let bid = session.bid ?? ""
 
-        for chunk in toRetry {
-            let file = URL(fileURLWithPath: chunk.filePath)
-            guard FileManager.default.fileExists(atPath: chunk.filePath) else {
-                logger.warn("Txn", "Chunk file missing for retry: \(chunk.filePath)")
-                continue
+        // Parallel retry sweep, capped at PipelineLimits.maxConcurrentUploads.
+        // Each chunk's success/failure is handled independently; aggregate
+        // success is computed at the end via areAllChunksUploaded.
+        await withTaskGroup(of: Void.self) { group in
+            var launched = 0
+            var iterator = toRetry.makeIterator()
+            let cap = PipelineLimits.maxConcurrentUploads
+
+            // Prime the pool.
+            while launched < cap, let chunk = iterator.next() {
+                group.addTask { [self] in
+                    await retryOne(chunk, folderName: folderName, bid: bid, onChunkEvent: onChunkEvent)
+                }
+                launched += 1
             }
 
-            onChunkEvent?(.chunkRetryStarted, .info, "Retrying chunk upload", [
-                "chunkId": chunk.chunkId,
-                "chunkIndex": "\(chunk.chunkIndex)"
-            ])
-
-            try? await dataManager.markInProgress(chunk.chunkId)
-
-            let metadata = UploadMetadata(
-                chunkId: chunk.chunkId,
-                sessionId: chunk.sessionId,
-                chunkIndex: chunk.chunkIndex,
-                fileName: chunk.fileName,
-                folderName: folderName,
-                bid: bid
-            )
-
-            switch await chunkUploader.upload(file: file, metadata: metadata) {
-            case .success:
-                try? await dataManager.markUploaded(chunk.chunkId)
-                deleteFile(file, logger: logger)
-                onChunkEvent?(.chunkRetrySuccess, .success, "Chunk retry upload succeeded", [
-                    "chunkId": chunk.chunkId,
-                    "chunkIndex": "\(chunk.chunkIndex)"
-                ])
-
-            case .failure(let error, _):
-                try? await dataManager.markFailed(chunk.chunkId)
-                onChunkEvent?(.chunkRetryFailed, .error, "Chunk retry upload failed: \(error)", [
-                    "chunkId": chunk.chunkId,
-                    "chunkIndex": "\(chunk.chunkIndex)",
-                    "error": error
-                ])
+            // As each task finishes, feed the next one in. Cap of `cap` concurrent uploads.
+            while await group.next() != nil {
+                if let chunk = iterator.next() {
+                    group.addTask { [self] in
+                        await retryOne(chunk, folderName: folderName, bid: bid, onChunkEvent: onChunkEvent)
+                    }
+                }
             }
         }
 
         return (try? await dataManager.areAllChunksUploaded(sessionId: sessionId)) ?? false
+    }
+
+    private func retryOne(
+        _ chunk: AudioChunkRecord,
+        folderName: String,
+        bid: String,
+        onChunkEvent: ((SessionEventName, EventType, String, [String: String]) -> Void)?
+    ) async {
+        let file = URL(fileURLWithPath: chunk.filePath)
+        guard FileManager.default.fileExists(atPath: chunk.filePath) else {
+            logger.warn("Txn", "Chunk file missing for retry: \(chunk.filePath)")
+            return
+        }
+
+        onChunkEvent?(.chunkRetryStarted, .info, "Retrying chunk upload", [
+            "chunkId": chunk.chunkId,
+            "chunkIndex": "\(chunk.chunkIndex)"
+        ])
+
+        try? await dataManager.markInProgress(chunk.chunkId)
+
+        let metadata = UploadMetadata(
+            chunkId: chunk.chunkId,
+            sessionId: chunk.sessionId,
+            chunkIndex: chunk.chunkIndex,
+            fileName: chunk.fileName,
+            folderName: folderName,
+            bid: bid
+        )
+
+        switch await chunkUploader.upload(file: file, metadata: metadata) {
+        case .success:
+            try? await dataManager.markUploaded(chunk.chunkId)
+            deleteFile(file, logger: logger)
+            onChunkEvent?(.chunkRetrySuccess, .success, "Chunk retry upload succeeded", [
+                "chunkId": chunk.chunkId,
+                "chunkIndex": "\(chunk.chunkIndex)"
+            ])
+
+        case .failure(let error, _):
+            try? await dataManager.markFailed(chunk.chunkId)
+            onChunkEvent?(.chunkRetryFailed, .error, "Chunk retry upload failed: \(error)", [
+                "chunkId": chunk.chunkId,
+                "chunkIndex": "\(chunk.chunkIndex)",
+                "error": error
+            ])
+        }
     }
 
     func checkAndProgress(sessionId: String, sessionConfig: SessionConfig? = nil, force: Bool = false) async -> TransactionResult {

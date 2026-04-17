@@ -483,55 +483,75 @@ public final class EkaScribe: @unchecked Sendable {
     func mapUserConfigs(_ response: GetConfigResponse) -> UserConfigs? {
         guard let data = response.data else { return nil }
 
+        // Map consultation modes (plain array in JSON)
+        let modes: [ConsultationMode] = data.consultationModes?.compactMap { item -> ConsultationMode? in
+            guard let id = item.id, let name = item.name else { return nil }
+            return ConsultationMode(id: id, name: name, desc: item.desc ?? "")
+        } ?? []
         let consultationModes = ConsultationModeConfig(
-            modes: data.consultationModes?.items?.compactMap {
-                guard let id = $0.id, let name = $0.name else { return nil }
-                return ConsultationMode(id: id, name: name, desc: $0.desc ?? "")
-            } ?? [],
-            maxSelection: data.consultationModes?.maxSelection ?? 1
+            modes: modes,
+            maxSelection: data.maxSelection?.consultationModes ?? 1
         )
 
+        // Map supported languages (plain array in JSON)
+        let languages: [SupportedLanguage] = data.supportedLanguages?.compactMap { item -> SupportedLanguage? in
+            guard let id = item.id, let name = item.name else { return nil }
+            return SupportedLanguage(id: id, name: name)
+        } ?? []
         let supportedLanguages = SupportedLanguagesConfig(
-            languages: data.supportedLanguages?.items?.compactMap {
-                guard let id = $0.id, let name = $0.name else { return nil }
-                return SupportedLanguage(id: id, name: name)
-            } ?? [],
-            maxSelection: data.supportedLanguages?.maxSelection ?? 1
+            languages: languages,
+            maxSelection: data.maxSelection?.supportedLanguages ?? 2
         )
 
+        // Map output templates (plain array in JSON, key: supported_output_formats)
+        let allTemplates: [ConfigOutputTemplate] = {
+            // Combine supported_output_formats + my_templates, deduped
+            var seen = Set<String>()
+            var result: [ConfigOutputTemplate] = []
+            for item in (data.supportedOutputFormats ?? []) + (data.myTemplates ?? []) {
+                guard let id = item.id, let name = item.name, !seen.contains(id) else { continue }
+                seen.insert(id)
+                result.append(ConfigOutputTemplate(id: id, name: name))
+            }
+            return result
+        }()
         let outputTemplates = OutputTemplatesConfig(
-            templates: data.outputTemplates?.items?.compactMap {
-                guard let id = $0.id, let name = $0.name else { return nil }
-                return ConfigOutputTemplate(id: id, name: name)
-            } ?? [],
-            maxSelection: data.outputTemplates?.maxSelection ?? 1
+            templates: allTemplates,
+            maxSelection: data.maxSelection?.supportedOutputFormats ?? 1
         )
 
-        let modelConfigs = ModelConfigs(
-            modelTypes: data.modelConfigs?.items?.compactMap {
-                guard let id = $0.id, let name = $0.name else { return nil }
-                return ModelType(id: id, name: name, desc: $0.desc ?? "")
-            } ?? [],
-            maxSelection: data.modelConfigs?.maxSelection ?? 1
-        )
+        // Model configs not in JSON; leave empty
+        let modelConfigs = ModelConfigs(modelTypes: [], maxSelection: 1)
+
+        // Map selected preferences
+        // consultation_mode is a plain string in JSON, resolve against modes list
+        let selectedMode: ConsultationMode? = {
+            guard let modeId = data.selectedPreferences?.consultationMode else { return nil }
+            return modes.first { $0.id == modeId }
+                ?? ConsultationMode(id: modeId, name: modeId.capitalized, desc: "")
+        }()
+
+        let selectedLangs: [SupportedLanguage] = data.selectedPreferences?.languages?.compactMap { item -> SupportedLanguage? in
+            guard let id = item.id, let name = item.name else { return nil }
+            return SupportedLanguage(id: id, name: name)
+        } ?? []
+
+        let selectedOutputs: [ConfigOutputTemplate] = data.selectedPreferences?.outputFormats?.compactMap { item -> ConfigOutputTemplate? in
+            guard let id = item.id, let name = item.name else { return nil }
+            return ConfigOutputTemplate(id: id, name: name)
+        } ?? []
+
+        // model_type is a plain string in JSON
+        let selectedModelType: ModelType? = {
+            guard let modelId = data.selectedPreferences?.modelType else { return nil }
+            return ModelType(id: modelId, name: modelId.capitalized, desc: "")
+        }()
 
         let selected = SelectedUserPreferences(
-            consultationMode: data.selectedUserPreferences?.consultationMode.flatMap {
-                guard let id = $0.id, let name = $0.name else { return nil }
-                return ConsultationMode(id: id, name: name, desc: $0.desc ?? "")
-            },
-            languages: data.selectedUserPreferences?.languages?.compactMap {
-                guard let id = $0.id, let name = $0.name else { return nil }
-                return SupportedLanguage(id: id, name: name)
-            } ?? [],
-            outputTemplates: data.selectedUserPreferences?.outputTemplates?.compactMap {
-                guard let id = $0.id, let name = $0.name else { return nil }
-                return ConfigOutputTemplate(id: id, name: name)
-            } ?? [],
-            modelType: data.selectedUserPreferences?.modelType.flatMap {
-                guard let id = $0.id, let name = $0.name else { return nil }
-                return ModelType(id: id, name: name, desc: $0.desc ?? "")
-            }
+            consultationMode: selectedMode,
+            languages: selectedLangs,
+            outputTemplates: selectedOutputs,
+            modelType: selectedModelType
         )
 
         return UserConfigs(

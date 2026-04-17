@@ -4,28 +4,32 @@ struct GetConfigResponse: Decodable {
     let data: ConfigData?
 
     struct ConfigData: Decodable {
-        let consultationModes: SelectionConfig<ModeItem>?
-        let supportedLanguages: SelectionConfig<LanguageItem>?
-        let outputTemplates: SelectionConfig<TemplateItemDTO>?
-        let selectedUserPreferences: SelectedPreferencesDTO?
-        let modelConfigs: SelectionConfig<ModelItem>?
+        let consultationModes: [ModeItem]?
+        let supportedLanguages: [LanguageItem]?
+        let supportedOutputFormats: [TemplateItemDTO]?
+        let maxSelection: MaxSelectionConfig?
+        let selectedPreferences: SelectedPreferencesDTO?
+        let myTemplates: [TemplateItemDTO]?
 
         enum CodingKeys: String, CodingKey {
             case consultationModes = "consultation_modes"
             case supportedLanguages = "supported_languages"
-            case outputTemplates = "supported_output_formats"
-            case selectedUserPreferences = "selected_preferences"
-            case modelConfigs = "model_configs"
+            case supportedOutputFormats = "supported_output_formats"
+            case maxSelection = "max_selection"
+            case selectedPreferences = "selected_preferences"
+            case myTemplates = "my_templates"
         }
     }
 
-    struct SelectionConfig<T: Decodable>: Decodable {
-        let items: [T]?
-        let maxSelection: Int?
+    struct MaxSelectionConfig: Decodable {
+        let supportedLanguages: Int?
+        let supportedOutputFormats: Int?
+        let consultationModes: Int?
 
         enum CodingKeys: String, CodingKey {
-            case items
-            case maxSelection = "max_selection"
+            case supportedLanguages = "supported_languages"
+            case supportedOutputFormats = "supported_output_formats"
+            case consultationModes = "consultation_modes"
         }
     }
 
@@ -52,15 +56,15 @@ struct GetConfigResponse: Decodable {
     }
 
     struct SelectedPreferencesDTO: Decodable {
-        let consultationMode: ModeItem?
+        let consultationMode: String?
         let languages: [LanguageItem]?
-        let outputTemplates: [TemplateItemDTO]?
-        let modelType: ModelItem?
+        let outputFormats: [TemplateItemDTO]?
+        let modelType: String?
 
         enum CodingKeys: String, CodingKey {
             case consultationMode = "consultation_mode"
             case languages
-            case outputTemplates = "output_formats"
+            case outputFormats = "output_formats"
             case modelType = "model_type"
         }
     }

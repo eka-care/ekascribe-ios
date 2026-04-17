@@ -252,8 +252,18 @@ final class SessionManager: @unchecked Sendable {
                 self.handleError(sessionId: sessionId, code: .transcriptionFailed, message: error)
 
             case .timeout:
-                self.transition(to: .completed)
-                self.eventEmitter?.emit(.pollResultTimeout, .info, "Poll timeout")
+                // Backend kept returning 202 (or transient errors) for every poll
+                // attempt. Surface this as a session failure so the app's UI flips
+                // to the error state and the doctor can tap retry. The retry path
+                // re-enters EkaScribe.retrySession → checkAndProgress, which sees
+                // uploadStage == .analyzing and runs pollResult again with a fresh
+                // 10-attempt budget.
+                self.eventEmitter?.emit(.pollResultTimeout, .error, "Poll timeout")
+                self.handleError(
+                    sessionId: sessionId,
+                    code: .pollTimeout,
+                    message: "Transcription is still processing. Please retry."
+                )
             }
 
             if let fullAudioResult {
@@ -378,20 +388,57 @@ final class SessionManager: @unchecked Sendable {
 
     static func mapToSessionResult(sessionId: String, _ response: ScribeResultResponse) -> SessionResult {
         var templates: [TemplateOutput] = []
+        let templateResults = response.data?.templateResults
 
-        let outputs = response.data?.output?.compactMap { $0 } ?? []
-        for output in outputs {
-            let decoded = output.value.flatMap { Data(base64Encoded: $0) }.flatMap { String(data: $0, encoding: .utf8) }
-            let section = SectionData(title: output.name, value: decoded ?? output.value)
+        // Custom templates (e.g. SOAP, Clinical Notes, EMR, user-created templates)
+        let customOutputs = templateResults?.custom?.compactMap { $0 } ?? []
+        for output in customOutputs {
             templates.append(
                 TemplateOutput(
                     name: output.name,
                     title: output.name,
-                    sections: [section],
+                    sections: parseSections(from: output.value),
                     sessionId: sessionId,
                     templateId: output.templateId,
                     isEditable: true,
-                    type: output.templateType ?? .markdown,
+                    type: output.templateType ?? .json,
+                    rawOutput: output.value
+                )
+            )
+        }
+
+        // Integration templates (e.g. eka_emr_template)
+        let integrationOutputs = templateResults?.integration?.compactMap { $0 } ?? []
+        for output in integrationOutputs {
+            let templateType = TemplateType(rawValue: output.type ?? "") ?? .json
+            templates.append(
+                TemplateOutput(
+                    name: output.name,
+                    title: output.name,
+                    sections: parseSections(from: output.value),
+                    sessionId: sessionId,
+                    templateId: output.templateId,
+                    isEditable: true,
+                    type: templateType,
+                    rawOutput: output.value
+                )
+            )
+        }
+
+        // Transcript
+        let transcriptOutputs = templateResults?.transcript?.compactMap { $0 } ?? []
+        for output in transcriptOutputs {
+            let decoded = output.value.flatMap { Data(base64Encoded: $0) }.flatMap { String(data: $0, encoding: .utf8) }
+            let section = SectionData(title: "Transcript", value: decoded ?? output.value)
+            templates.append(
+                TemplateOutput(
+                    name: "Transcription",
+                    title: "Transcription",
+                    sections: [section],
+                    sessionId: sessionId,
+                    templateId: "transcript_template",
+                    isEditable: false,
+                    type: .markdown,
                     rawOutput: output.value
                 )
             )
@@ -399,5 +446,28 @@ final class SessionManager: @unchecked Sendable {
 
         let audioQuality = response.data?.audioMatrix?.quality
         return SessionResult(templates: templates, audioQuality: audioQuality)
+    }
+
+    /// Parse base64-encoded JSON [{title, value}] into SectionData array.
+    /// Falls back to a single section if decoding fails.
+    private static func parseSections(from base64Value: String?) -> [SectionData] {
+        guard let base64Value,
+              let data = Data(base64Encoded: base64Value),
+              let decoded = String(data: data, encoding: .utf8),
+              let jsonData = decoded.data(using: .utf8),
+              let jsonArray = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: String]]
+        else {
+            // Fallback: try as plain base64 text
+            if let base64Value,
+               let data = Data(base64Encoded: base64Value),
+               let text = String(data: data, encoding: .utf8) {
+                return [SectionData(title: nil, value: text)]
+            }
+            return []
+        }
+
+        return jsonArray.map { item in
+            SectionData(title: item["title"], value: item["value"])
+        }
     }
 }

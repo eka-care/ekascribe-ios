@@ -32,7 +32,7 @@ enum ScribeEndpoint: RequestProvider {
         case .getTemplates:
             return "/voice/api/v1/template"
         case .updateTemplates, .getUserConfig, .updateUserConfig:
-            return "/voice/api/v2/config"
+            return "/voice/api/v2/config/"
         case .getHistory:
             return "/voice/api/v2/transaction/history"
         }
