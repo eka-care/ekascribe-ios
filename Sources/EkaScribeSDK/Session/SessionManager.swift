@@ -235,35 +235,69 @@ final class SessionManager: @unchecked Sendable {
             }
             self.eventEmitter?.emit(.commitTransactionSuccess, .success, "Commit transaction success")
 
-            switch await self.transactionManager.pollResult(sessionId: sessionId) {
+            // ── Phase 1: Poll for transcript ──
+            let transcriptPollResult = await self.transactionManager.pollResult(
+                sessionId: sessionId, templateId: "transcript"
+            )
+
+            switch transcriptPollResult {
             case .success(let response):
-                self.eventEmitter?.emit(.pollResultSuccess, .success, "Poll result received successfully")
+                let transcriptResult = Self.mapToTranscriptResult(sessionId: sessionId, response)
+                self.delegate?.scribe(EkaScribe.shared, didReadyTranscript: sessionId, result: transcriptResult)
+                self.eventEmitter?.emit(.transcriptReady, .success, "Transcript ready")
+
+                // Mark session COMPLETED after transcript so client can start a new session
                 try? await self.dataManager.updateSessionState(sessionId, SessionState.completed.rawValue)
                 self.transition(to: .completed)
-                let result = Self.mapToSessionResult(sessionId: sessionId, response)
-                self.eventEmitter?.emit(.sessionResultReceived, .success, "Session result received", [
-                    "templateCount": "\(result.templates.count)"
-                ])
+
+            case .failed(let error):
+                self.logger.warn("SessionManager", "Transcript poll failed: \(error), proceeding to full output")
+
+            case .timeout:
+                self.logger.warn("SessionManager", "Transcript poll timeout, proceeding to full output")
+            }
+
+            // ── Phase 2: Poll for full output ──
+            let fullPollResult = await self.transactionManager.pollResult(
+                sessionId: sessionId, templateId: nil
+            )
+
+            switch fullPollResult {
+            case .success(let response):
+                let outputResult = Self.mapToOutputResult(sessionId: sessionId, response)
+                self.delegate?.scribe(EkaScribe.shared, didReadyOutput: sessionId, result: outputResult)
+                self.eventEmitter?.emit(.outputReady, .success, "Output templates ready")
+
+                // If not already COMPLETED (transcript failed/timed out), mark now
+                if self.currentState != .completed {
+                    try? await self.dataManager.updateSessionState(sessionId, SessionState.completed.rawValue)
+                    self.transition(to: .completed)
+                }
+
+                let fullResult = Self.mapToSessionResult(sessionId: sessionId, response)
+                self.delegate?.scribe(EkaScribe.shared, didCompleteSession: sessionId, result: fullResult)
                 self.eventEmitter?.emit(.sessionCompleted, .success, "Session completed")
-                self.delegate?.scribe(EkaScribe.shared, didCompleteSession: sessionId, result: result)
 
             case .failed(let error):
                 self.eventEmitter?.emit(.pollResultFailed, .error, "Poll result failed: \(error)")
-                self.handleError(sessionId: sessionId, code: .transcriptionFailed, message: error)
+                if self.currentState != .completed {
+                    self.handleError(sessionId: sessionId, code: .transcriptionFailed, message: error)
+                } else {
+                    let scribeError = ScribeError(code: .transcriptionFailed, message: error)
+                    self.delegate?.scribe(EkaScribe.shared, didFailSession: sessionId, error: scribeError)
+                }
 
             case .timeout:
-                // Backend kept returning 202 (or transient errors) for every poll
-                // attempt. Surface this as a session failure so the app's UI flips
-                // to the error state and the doctor can tap retry. The retry path
-                // re-enters EkaScribe.retrySession → checkAndProgress, which sees
-                // uploadStage == .analyzing and runs pollResult again with a fresh
-                // 10-attempt budget.
-                self.eventEmitter?.emit(.pollResultTimeout, .error, "Poll timeout")
-                self.handleError(
-                    sessionId: sessionId,
-                    code: .pollTimeout,
-                    message: "Transcription is still processing. Please retry."
-                )
+                if self.currentState != .completed {
+                    self.eventEmitter?.emit(.pollResultTimeout, .error, "Poll timeout")
+                    self.handleError(
+                        sessionId: sessionId,
+                        code: .pollTimeout,
+                        message: "Transcription is still processing. Please retry."
+                    )
+                } else {
+                    self.logger.warn("SessionManager", "Full output poll timeout: \(sessionId)")
+                }
             }
 
             if let fullAudioResult {
@@ -442,6 +476,72 @@ final class SessionManager: @unchecked Sendable {
                     documentId: output.documentId,
                     isEditable: false,
                     type: .markdown,
+                    rawOutput: output.value
+                )
+            )
+        }
+
+        let audioQuality = response.data?.audioMatrix?.quality
+        return SessionResult(templates: templates, audioQuality: audioQuality)
+    }
+
+    /// Maps only the transcript templates from the response.
+    static func mapToTranscriptResult(sessionId: String, _ response: ScribeResultResponse) -> SessionResult {
+        var templates: [TemplateOutput] = []
+        let transcriptOutputs = response.data?.templateResults?.transcript?.compactMap { $0 } ?? []
+        for output in transcriptOutputs {
+            let decoded = output.value.flatMap { Data(base64Encoded: $0) }.flatMap { String(data: $0, encoding: .utf8) }
+            let section = SectionData(title: "Transcript", value: decoded ?? output.value)
+            templates.append(
+                TemplateOutput(
+                    name: "Transcription",
+                    title: "Transcription",
+                    sections: [section],
+                    sessionId: sessionId,
+                    templateId: "transcript_template",
+                    isEditable: false,
+                    type: .markdown,
+                    rawOutput: output.value
+                )
+            )
+        }
+        let audioQuality = response.data?.audioMatrix?.quality
+        return SessionResult(templates: templates, audioQuality: audioQuality)
+    }
+
+    /// Maps only custom + integration templates (excludes transcript).
+    static func mapToOutputResult(sessionId: String, _ response: ScribeResultResponse) -> SessionResult {
+        var templates: [TemplateOutput] = []
+        let templateResults = response.data?.templateResults
+
+        let customOutputs = templateResults?.custom?.compactMap { $0 } ?? []
+        for output in customOutputs {
+            templates.append(
+                TemplateOutput(
+                    name: output.name,
+                    title: output.name,
+                    sections: parseSections(from: output.value),
+                    sessionId: sessionId,
+                    templateId: output.templateId,
+                    isEditable: true,
+                    type: output.templateType ?? .json,
+                    rawOutput: output.value
+                )
+            )
+        }
+
+        let integrationOutputs = templateResults?.integration?.compactMap { $0 } ?? []
+        for output in integrationOutputs {
+            let templateType = TemplateType(rawValue: output.type ?? "") ?? .json
+            templates.append(
+                TemplateOutput(
+                    name: output.name,
+                    title: output.name,
+                    sections: parseSections(from: output.value),
+                    sessionId: sessionId,
+                    templateId: output.templateId,
+                    isEditable: true,
+                    type: templateType,
                     rawOutput: output.value
                 )
             )

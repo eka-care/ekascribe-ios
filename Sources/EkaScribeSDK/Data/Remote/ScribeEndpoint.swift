@@ -6,7 +6,7 @@ enum ScribeEndpoint: RequestProvider {
     case initTransaction(sessionId: String, body: InitTransactionRequest)
     case stopTransaction(sessionId: String, body: StopTransactionRequest)
     case commitTransaction(sessionId: String, body: StopTransactionRequest)
-    case getTransactionResult(sessionId: String)
+    case getTransactionResult(sessionId: String, templateId: String? = nil)
     case convertTransactionResult(sessionId: String, templateId: String)
     case updateSession(sessionId: String, body: [UpdateSessionRequestItem])
     case getTemplates
@@ -23,7 +23,7 @@ enum ScribeEndpoint: RequestProvider {
             return "/voice/api/v2/transaction/stop/\(sessionId)"
         case .commitTransaction(let sessionId, _):
             return "/voice/api/v2/transaction/commit/\(sessionId)"
-        case .getTransactionResult(let sessionId):
+        case .getTransactionResult(let sessionId, _):
             return "/voice/api/v3/status/\(sessionId)"
         case .convertTransactionResult(let sessionId, let templateId):
             return "/voice/api/v1/transaction/\(sessionId)/convert-to-template/\(templateId)"
@@ -67,6 +67,9 @@ enum ScribeEndpoint: RequestProvider {
 
     var queryItems: [String: String] {
         switch self {
+        case .getTransactionResult(_, let templateId):
+            guard let templateId else { return [:] }
+            return ["template_id": templateId]
         case .getHistory(let count):
             guard let count else { return [:] }
             return ["count": String(count)]

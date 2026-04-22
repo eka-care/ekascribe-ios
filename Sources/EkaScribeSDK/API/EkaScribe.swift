@@ -205,7 +205,7 @@ public final class EkaScribe: @unchecked Sendable {
             return .failure(error)
         }
 
-        switch await api.getTransactionResult(sessionId) {
+        switch await api.getTransactionResult(sessionId, templateId: nil) {
         case .success(let response, _):
             return .success(SessionManager.mapToSessionResult(sessionId: sessionId, response))
         case .serverError(_, let message, _):
