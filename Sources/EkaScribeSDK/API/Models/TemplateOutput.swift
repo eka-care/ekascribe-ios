@@ -6,6 +6,7 @@ public struct TemplateOutput: Sendable {
     public let sections: [SectionData]
     public let sessionId: String
     public var templateId: String?
+    public var documentId: String?
     public var isEditable: Bool
     public let type: TemplateType
     public var rawOutput: String?
@@ -16,6 +17,7 @@ public struct TemplateOutput: Sendable {
         sections: [SectionData],
         sessionId: String,
         templateId: String? = nil,
+        documentId: String? = nil,
         isEditable: Bool = false,
         type: TemplateType,
         rawOutput: String? = nil
@@ -25,6 +27,7 @@ public struct TemplateOutput: Sendable {
         self.sections = sections
         self.sessionId = sessionId
         self.templateId = templateId
+        self.documentId = documentId
         self.isEditable = isEditable
         self.type = type
         self.rawOutput = rawOutput

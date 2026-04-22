@@ -411,15 +411,18 @@ final class SessionManagerTests: XCTestCase {
         let json = """
         {
             "data": {
-                "output": [
-                    {
-                        "name": "SOAP Note",
-                        "status": "success",
-                        "template_id": "tmpl-1",
-                        "type": "markdown",
-                        "value": null
-                    }
-                ]
+                "template_results": {
+                    "custom": [
+                        {
+                            "name": "SOAP Note",
+                            "status": "success",
+                            "template_id": "tmpl-1",
+                            "document_id": "doc-1",
+                            "type": "markdown",
+                            "value": null
+                        }
+                    ]
+                }
             }
         }
         """
@@ -429,6 +432,7 @@ final class SessionManagerTests: XCTestCase {
         XCTAssertEqual(result.templates.count, 1)
         XCTAssertEqual(result.templates.first?.name, "SOAP Note")
         XCTAssertEqual(result.templates.first?.templateId, "tmpl-1")
+        XCTAssertEqual(result.templates.first?.documentId, "doc-1")
         XCTAssertEqual(result.templates.first?.type, .markdown)
     }
 

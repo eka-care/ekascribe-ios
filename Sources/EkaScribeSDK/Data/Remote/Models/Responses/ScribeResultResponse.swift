@@ -22,6 +22,7 @@ struct ScribeResultResponse: Decodable {
     }
 
     struct OutputDTO: Decodable {
+        let documentId: String?
         let errors: [ResultErrorDTO?]?
         let name: String?
         let status: ResultStatus?
@@ -29,12 +30,13 @@ struct ScribeResultResponse: Decodable {
         private let type: String?
         let value: String?
         let warnings: [ResultWarningDTO?]?
-        
+
         var templateType: TemplateType? {
             TemplateType(rawValue: type ?? "")
         }
 
         enum CodingKeys: String, CodingKey {
+            case documentId = "document_id"
             case errors
             case name
             case status
@@ -52,15 +54,27 @@ struct ScribeResultResponse: Decodable {
     }
 
     struct TranscriptDTO: Decodable {
+        let documentId: String?
         let errors: [ResultErrorDTO?]?
         let lang: String?
         let status: ResultStatus?
         let type: String?
         let value: String?
         let warnings: [ResultWarningDTO?]?
+
+        enum CodingKeys: String, CodingKey {
+            case documentId = "document_id"
+            case errors
+            case lang
+            case status
+            case type
+            case value
+            case warnings
+        }
     }
 
     struct IntegrationDTO: Decodable {
+        let documentId: String?
         let errors: [ResultErrorDTO?]?
         let name: String?
         let status: ResultStatus?
@@ -70,6 +84,7 @@ struct ScribeResultResponse: Decodable {
         let warnings: [ResultWarningDTO?]?
 
         enum CodingKeys: String, CodingKey {
+            case documentId = "document_id"
             case errors
             case name
             case status

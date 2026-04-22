@@ -31,16 +31,20 @@ final class SessionManagerMapTests: XCTestCase {
         XCTAssertTrue(result.templates.isEmpty)
     }
 
-    func testMapSingleOutput() throws {
+    func testMapSingleCustomOutput() throws {
         let response = try decodeResponse("""
         {
             "data": {
-                "output": [{
-                    "name": "SOAP Notes",
-                    "template_id": "t1",
-                    "type": "markdown",
-                    "value": "Some output"
-                }]
+                "template_results": {
+                    "custom": [{
+                        "name": "SOAP Notes",
+                        "template_id": "t1",
+                        "document_id": "doc-111",
+                        "type": "markdown",
+                        "value": "Some output",
+                        "status": "success"
+                    }]
+                }
             }
         }
         """)
@@ -50,6 +54,7 @@ final class SessionManagerMapTests: XCTestCase {
         XCTAssertEqual(result.templates[0].name, "SOAP Notes")
         XCTAssertEqual(result.templates[0].title, "SOAP Notes")
         XCTAssertEqual(result.templates[0].templateId, "t1")
+        XCTAssertEqual(result.templates[0].documentId, "doc-111")
         XCTAssertEqual(result.templates[0].type, .markdown)
         XCTAssertEqual(result.templates[0].sessionId, "s1")
         XCTAssertTrue(result.templates[0].isEditable)
@@ -62,11 +67,14 @@ final class SessionManagerMapTests: XCTestCase {
         let response = try decodeResponse("""
         {
             "data": {
-                "output": [{
-                    "name": "Notes",
-                    "type": "markdown",
-                    "value": "\(base64Value)"
-                }]
+                "template_results": {
+                    "custom": [{
+                        "name": "Notes",
+                        "type": "markdown",
+                        "value": "\(base64Value)",
+                        "status": "success"
+                    }]
+                }
             }
         }
         """)
@@ -81,17 +89,19 @@ final class SessionManagerMapTests: XCTestCase {
         let response = try decodeResponse("""
         {
             "data": {
-                "output": [{
-                    "name": "Notes",
-                    "type": "markdown",
-                    "value": "Not base64"
-                }]
+                "template_results": {
+                    "custom": [{
+                        "name": "Notes",
+                        "type": "markdown",
+                        "value": "Not base64",
+                        "status": "success"
+                    }]
+                }
             }
         }
         """)
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
-        // Non-base64 value should fall back to original value
         let section = result.templates[0].sections.first
         XCTAssertEqual(section?.value, "Not base64")
     }
@@ -100,11 +110,14 @@ final class SessionManagerMapTests: XCTestCase {
         let response = try decodeResponse("""
         {
             "data": {
-                "output": [{
-                    "name": "EMR",
-                    "type": "json",
-                    "value": "{}"
-                }]
+                "template_results": {
+                    "custom": [{
+                        "name": "EMR",
+                        "type": "json",
+                        "value": "{}",
+                        "status": "success"
+                    }]
+                }
             }
         }
         """)
@@ -126,14 +139,16 @@ final class SessionManagerMapTests: XCTestCase {
         XCTAssertEqual(result.audioQuality, 0.85)
     }
 
-    func testMapMultipleOutputs() throws {
+    func testMapMultipleCustomOutputs() throws {
         let response = try decodeResponse("""
         {
             "data": {
-                "output": [
-                    { "name": "Template 1", "template_id": "t1", "type": "markdown", "value": "val1" },
-                    { "name": "Template 2", "template_id": "t2", "type": "json", "value": "val2" }
-                ]
+                "template_results": {
+                    "custom": [
+                        { "name": "Template 1", "template_id": "t1", "document_id": "d1", "type": "markdown", "value": "val1", "status": "success" },
+                        { "name": "Template 2", "template_id": "t2", "document_id": "d2", "type": "json", "value": "val2", "status": "success" }
+                    ]
+                }
             }
         }
         """)
@@ -141,7 +156,9 @@ final class SessionManagerMapTests: XCTestCase {
 
         XCTAssertEqual(result.templates.count, 2)
         XCTAssertEqual(result.templates[0].name, "Template 1")
+        XCTAssertEqual(result.templates[0].documentId, "d1")
         XCTAssertEqual(result.templates[1].name, "Template 2")
+        XCTAssertEqual(result.templates[1].documentId, "d2")
     }
 
     func testMapNilOutputsFiltered() {
@@ -153,5 +170,79 @@ final class SessionManagerMapTests: XCTestCase {
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
         XCTAssertTrue(result.templates.isEmpty)
+    }
+
+    func testMapIntegrationWithDocumentId() throws {
+        let response = try decodeResponse("""
+        {
+            "data": {
+                "template_results": {
+                    "integration": [{
+                        "name": "Eka EMR Format",
+                        "template_id": "eka_emr_template",
+                        "document_id": "doc-int-1",
+                        "type": "json",
+                        "value": "e30=",
+                        "status": "success"
+                    }]
+                }
+            }
+        }
+        """)
+        let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
+
+        XCTAssertEqual(result.templates.count, 1)
+        XCTAssertEqual(result.templates[0].documentId, "doc-int-1")
+        XCTAssertEqual(result.templates[0].templateId, "eka_emr_template")
+        XCTAssertTrue(result.templates[0].isEditable)
+    }
+
+    func testMapTranscriptWithDocumentId() throws {
+        let plainText = "Patient has fever."
+        let base64Value = Data(plainText.utf8).base64EncodedString()
+
+        let response = try decodeResponse("""
+        {
+            "data": {
+                "template_results": {
+                    "transcript": [{
+                        "value": "\(base64Value)",
+                        "type": "transcript",
+                        "status": "success",
+                        "document_id": "doc-tr-1"
+                    }]
+                }
+            }
+        }
+        """)
+        let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
+
+        XCTAssertEqual(result.templates.count, 1)
+        XCTAssertEqual(result.templates[0].documentId, "doc-tr-1")
+        XCTAssertEqual(result.templates[0].templateId, "transcript_template")
+        XCTAssertFalse(result.templates[0].isEditable)
+        XCTAssertEqual(result.templates[0].sections.first?.value, plainText)
+    }
+
+    func testMapDocumentIdNilWhenMissing() throws {
+        let response = try decodeResponse("""
+        {
+            "data": {
+                "template_results": {
+                    "custom": [{
+                        "name": "Notes",
+                        "template_id": "t1",
+                        "type": "markdown",
+                        "value": "val",
+                        "status": "success"
+                    }]
+                }
+            }
+        }
+        """)
+        let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
+
+        XCTAssertEqual(result.templates.count, 1)
+        XCTAssertNil(result.templates[0].documentId)
     }
 }

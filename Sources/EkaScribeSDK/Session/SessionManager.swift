@@ -400,6 +400,7 @@ final class SessionManager: @unchecked Sendable {
                     sections: parseSections(from: output.value),
                     sessionId: sessionId,
                     templateId: output.templateId,
+                    documentId: output.documentId,
                     isEditable: true,
                     type: output.templateType ?? .json,
                     rawOutput: output.value
@@ -418,6 +419,7 @@ final class SessionManager: @unchecked Sendable {
                     sections: parseSections(from: output.value),
                     sessionId: sessionId,
                     templateId: output.templateId,
+                    documentId: output.documentId,
                     isEditable: true,
                     type: templateType,
                     rawOutput: output.value
@@ -437,6 +439,7 @@ final class SessionManager: @unchecked Sendable {
                     sections: [section],
                     sessionId: sessionId,
                     templateId: "transcript_template",
+                    documentId: output.documentId,
                     isEditable: false,
                     type: .markdown,
                     rawOutput: output.value

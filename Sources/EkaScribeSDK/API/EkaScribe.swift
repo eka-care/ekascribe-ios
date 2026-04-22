@@ -265,7 +265,7 @@ public final class EkaScribe: @unchecked Sendable {
             return .failure(error)
         }
 
-        let request = updatedData.map { UpdateSessionRequestItem(data: $0.data, templateId: $0.templateId) }
+        let request = updatedData.map { UpdateSessionRequestItem(data: $0.data, documentId: $0.documentId) }
         switch await api.updateSession(sessionId, request) {
         case .success:
             return .success(true)

@@ -80,8 +80,9 @@ final class AdditionalModelTests: XCTestCase {
     // MARK: - SessionData
 
     func testSessionDataInit() {
-        let data = SessionData(templateId: "t-1", data: "{\"key\": \"value\"}")
+        let data = SessionData(templateId: "t-1", documentId: "doc-1", data: "{\"key\": \"value\"}")
         XCTAssertEqual(data.templateId, "t-1")
+        XCTAssertEqual(data.documentId, "doc-1")
         XCTAssertEqual(data.data, "{\"key\": \"value\"}")
     }
 
