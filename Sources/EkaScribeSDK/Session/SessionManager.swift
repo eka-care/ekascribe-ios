@@ -391,7 +391,7 @@ final class SessionManager: @unchecked Sendable {
         let templateResults = response.data?.templateResults
 
         // Custom templates (e.g. SOAP, Clinical Notes, EMR, user-created templates)
-        let customOutputs = templateResults?.custom?.compactMap { $0 } ?? []
+        let customOutputs = templateResults?.custom?.compactMap { $0 }.filter { $0.documentType == "document" } ?? []
         for output in customOutputs {
             templates.append(
                 TemplateOutput(
@@ -420,7 +420,7 @@ final class SessionManager: @unchecked Sendable {
                     sessionId: sessionId,
                     templateId: output.templateId,
                     documentId: output.documentId,
-                    isEditable: true,
+                    isEditable: false,
                     type: templateType,
                     rawOutput: output.value
                 )

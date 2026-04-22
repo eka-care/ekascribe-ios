@@ -40,6 +40,7 @@ final class SessionManagerMapTests: XCTestCase {
                         "name": "SOAP Notes",
                         "template_id": "t1",
                         "document_id": "doc-111",
+                        "document_type": "document",
                         "type": "markdown",
                         "value": "Some output",
                         "status": "success"
@@ -71,6 +72,7 @@ final class SessionManagerMapTests: XCTestCase {
                     "custom": [{
                         "name": "Notes",
                         "type": "markdown",
+                        "document_type": "document",
                         "value": "\(base64Value)",
                         "status": "success"
                     }]
@@ -93,6 +95,7 @@ final class SessionManagerMapTests: XCTestCase {
                     "custom": [{
                         "name": "Notes",
                         "type": "markdown",
+                        "document_type": "document",
                         "value": "Not base64",
                         "status": "success"
                     }]
@@ -114,6 +117,7 @@ final class SessionManagerMapTests: XCTestCase {
                     "custom": [{
                         "name": "EMR",
                         "type": "json",
+                        "document_type": "document",
                         "value": "{}",
                         "status": "success"
                     }]
@@ -145,8 +149,8 @@ final class SessionManagerMapTests: XCTestCase {
             "data": {
                 "template_results": {
                     "custom": [
-                        { "name": "Template 1", "template_id": "t1", "document_id": "d1", "type": "markdown", "value": "val1", "status": "success" },
-                        { "name": "Template 2", "template_id": "t2", "document_id": "d2", "type": "json", "value": "val2", "status": "success" }
+                        { "name": "Template 1", "template_id": "t1", "document_id": "d1", "document_type": "document", "type": "markdown", "value": "val1", "status": "success" },
+                        { "name": "Template 2", "template_id": "t2", "document_id": "d2", "document_type": "document", "type": "json", "value": "val2", "status": "success" }
                     ]
                 }
             }
@@ -224,18 +228,15 @@ final class SessionManagerMapTests: XCTestCase {
         XCTAssertEqual(result.templates[0].sections.first?.value, plainText)
     }
 
-    func testMapDocumentIdNilWhenMissing() throws {
+    func testMapCustomFiltersOutNonDocumentType() throws {
         let response = try decodeResponse("""
         {
             "data": {
                 "template_results": {
-                    "custom": [{
-                        "name": "Notes",
-                        "template_id": "t1",
-                        "type": "markdown",
-                        "value": "val",
-                        "status": "success"
-                    }]
+                    "custom": [
+                        { "name": "SOAP Notes", "template_id": "t1", "document_id": "d1", "document_type": "document", "type": "markdown", "value": "val1", "status": "success" },
+                        { "name": "Add context", "template_id": "__non_tmp_doc", "document_id": "d2", "document_type": "context", "type": "markdown", "value": "val2", "status": "success" }
+                    ]
                 }
             }
         }
@@ -243,6 +244,7 @@ final class SessionManagerMapTests: XCTestCase {
         let result = SessionManager.mapToSessionResult(sessionId: "s1", response)
 
         XCTAssertEqual(result.templates.count, 1)
-        XCTAssertNil(result.templates[0].documentId)
+        XCTAssertEqual(result.templates[0].name, "SOAP Notes")
+        XCTAssertEqual(result.templates[0].documentId, "d1")
     }
 }

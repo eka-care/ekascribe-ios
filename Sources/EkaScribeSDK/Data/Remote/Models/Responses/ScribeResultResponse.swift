@@ -23,6 +23,7 @@ struct ScribeResultResponse: Decodable {
 
     struct OutputDTO: Decodable {
         let documentId: String?
+        let documentType: String?
         let errors: [ResultErrorDTO?]?
         let name: String?
         let status: ResultStatus?
@@ -37,6 +38,7 @@ struct ScribeResultResponse: Decodable {
 
         enum CodingKeys: String, CodingKey {
             case documentId = "document_id"
+            case documentType = "document_type"
             case errors
             case name
             case status
@@ -55,6 +57,7 @@ struct ScribeResultResponse: Decodable {
 
     struct TranscriptDTO: Decodable {
         let documentId: String?
+        let documentType: String?
         let errors: [ResultErrorDTO?]?
         let lang: String?
         let status: ResultStatus?
@@ -64,6 +67,7 @@ struct ScribeResultResponse: Decodable {
 
         enum CodingKeys: String, CodingKey {
             case documentId = "document_id"
+            case documentType = "document_type"
             case errors
             case lang
             case status
@@ -75,6 +79,7 @@ struct ScribeResultResponse: Decodable {
 
     struct IntegrationDTO: Decodable {
         let documentId: String?
+        let documentType: String?
         let errors: [ResultErrorDTO?]?
         let name: String?
         let status: ResultStatus?
@@ -85,6 +90,7 @@ struct ScribeResultResponse: Decodable {
 
         enum CodingKeys: String, CodingKey {
             case documentId = "document_id"
+            case documentType = "document_type"
             case errors
             case name
             case status

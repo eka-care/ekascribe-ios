@@ -418,6 +418,7 @@ final class SessionManagerTests: XCTestCase {
                             "status": "success",
                             "template_id": "tmpl-1",
                             "document_id": "doc-1",
+                            "document_type": "document",
                             "type": "markdown",
                             "value": null
                         }
