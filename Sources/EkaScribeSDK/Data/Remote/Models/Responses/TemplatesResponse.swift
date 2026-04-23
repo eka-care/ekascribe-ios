@@ -1,11 +1,7 @@
 import Foundation
 
 struct TemplatesResponse: Decodable {
-    let data: DataDTO?
-
-    struct DataDTO: Decodable {
-        let templates: [TemplateDTO]?
-    }
+    let items: [TemplateDTO]?
 
     struct TemplateDTO: Decodable {
         let isDefault: Bool?

@@ -131,7 +131,10 @@ final class TransactionManager: TransactionManaging {
                     continue
                 }
 
-                let statuses = response.data?.output?.compactMap { $0?.status } ?? []
+                let templateResults = response.data?.templateResults
+                let statuses: [ResultStatus] = (templateResults?.transcript?.compactMap { $0?.status } ?? [])
+                    + (templateResults?.custom?.compactMap { $0?.status } ?? [])
+                    + (templateResults?.integration?.compactMap { $0?.status } ?? [])
 
                 if statuses.contains(where: { successStates.contains($0) }) {
                     try? await dataManager.updateUploadStage(sessionId, TransactionStage.completed.rawValue)

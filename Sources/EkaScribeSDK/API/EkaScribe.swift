@@ -286,7 +286,7 @@ public final class EkaScribe: @unchecked Sendable {
 
         switch await api.getTemplates() {
         case .success(let response, _):
-            let items = response.data?.templates?.compactMap { dto -> TemplateItem? in
+            let items = response.items?.compactMap { dto -> TemplateItem? in
                 guard let id = dto.id, let title = dto.title else { return nil }
                 return TemplateItem(
                     isDefault: dto.isDefault ?? false,
