@@ -26,14 +26,14 @@ final class IOSAudioRecorder: AudioRecorder {
     func start() throws {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
+        // .spokenAudio enables AGC and voice processing for clearer, louder mic signal
         try session.setCategory(.record, mode: .measurement)
-        try session.setPreferredSampleRate(Double(config.sampleRate))
         try session.setActive(true)
         registerObservers()
         #endif
 
         let input = engine.inputNode
-        let hwFormat = input.inputFormat(forBus: 0)
+        let hwFormat = input.outputFormat(forBus: 0)
 
         // Target format: 16kHz mono Float32
         guard let tgtFormat = AVAudioFormat(
@@ -54,8 +54,9 @@ final class IOSAudioRecorder: AudioRecorder {
             guard converter != nil else {
                 throw ScribeException(code: .recorderSetupFailed, message: "Failed to create AVAudioConverter from \(hwFormat) to \(tgtFormat)")
             }
-            // Pre-allocate output buffer with generous capacity (reused every callback)
-            let maxOutputFrames: AVAudioFrameCount = 4096
+            // Size output capacity to handle the largest possible input burst at this rate ratio
+            let ratio = tgtFormat.sampleRate / hwFormat.sampleRate
+            let maxOutputFrames = AVAudioFrameCount(ceil(Double(config.frameSize) * ratio)) + 64
             convertedBuffer = AVAudioPCMBuffer(pcmFormat: tgtFormat, frameCapacity: maxOutputFrames)
         }
 
@@ -102,6 +103,10 @@ final class IOSAudioRecorder: AudioRecorder {
             }
 
             guard !pcm.isEmpty else { return }
+
+            let sumOfSquares = pcm.reduce(0.0) { $0 + Double($1) * Double($1) }
+            let rms = sqrt(sumOfSquares / Double(pcm.count))
+            self.logger.info("Recorder", "Frame \(self.frameIndex) RMS=\(String(format: "%.2f", rms))")
 
             let frame = AudioFrame(
                 pcm: pcm,
