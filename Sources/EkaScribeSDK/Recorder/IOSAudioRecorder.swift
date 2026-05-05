@@ -27,7 +27,8 @@ final class IOSAudioRecorder: AudioRecorder {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         // .spokenAudio enables AGC and voice processing for clearer, louder mic signal
-        try session.setCategory(.record, mode: .measurement)
+        try session.setCategory(.playAndRecord, mode: .spokenAudio)
+        try session.setPreferredSampleRate(Double(config.sampleRate))
         try session.setActive(true)
         registerObservers()
         #endif
@@ -55,8 +56,7 @@ final class IOSAudioRecorder: AudioRecorder {
                 throw ScribeException(code: .recorderSetupFailed, message: "Failed to create AVAudioConverter from \(hwFormat) to \(tgtFormat)")
             }
             // Size output capacity to handle the largest possible input burst at this rate ratio
-            let ratio = tgtFormat.sampleRate / hwFormat.sampleRate
-            let maxOutputFrames = AVAudioFrameCount(ceil(Double(config.frameSize) * ratio)) + 64
+            let maxOutputFrames: AVAudioFrameCount = 4096
             convertedBuffer = AVAudioPCMBuffer(pcmFormat: tgtFormat, frameCapacity: maxOutputFrames)
         }
 
@@ -72,9 +72,9 @@ final class IOSAudioRecorder: AudioRecorder {
 
         let conv = converter
         let outBuf = convertedBuffer
+        let hwFormat = input.outputFormat(forBus: 0)
 
-        // Install tap with nil format (uses hardware format) to avoid format mismatch crash
-        input.installTap(onBus: 0, bufferSize: AVAudioFrameCount(config.frameSize), format: nil) { [weak self] buffer, _ in
+        input.installTap(onBus: 0, bufferSize: AVAudioFrameCount(config.frameSize), format: hwFormat) { [weak self] buffer, _ in
             guard let self, !self.isPaused else { return }
 
             let pcm: [Int16]
@@ -172,7 +172,7 @@ final class IOSAudioRecorder: AudioRecorder {
         #endif
 
         let input = engine.inputNode
-        let newHwFormat = input.inputFormat(forBus: 0)
+        let newHwFormat = input.outputFormat(forBus: 0)
 
         guard newHwFormat.sampleRate > 0, newHwFormat.channelCount > 0 else {
             logger.warn("Recorder", "Invalid hardware format on resume: \(newHwFormat)")
@@ -269,7 +269,7 @@ final class IOSAudioRecorder: AudioRecorder {
 
         let input = engine.inputNode
         // The hardware format can momentarily be 0 channels during switch; fallback if invalid
-        let newHwFormat = input.inputFormat(forBus: 0)
+        let newHwFormat = input.outputFormat(forBus: 0)
         guard newHwFormat.sampleRate > 0 && newHwFormat.channelCount > 0 else {
             logger.warn("Recorder", "Invalid hardware format during route change: \(newHwFormat)")
             return
