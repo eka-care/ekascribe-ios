@@ -106,6 +106,10 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
             self?.audioFocusSubject.send(hasFocus)
         }
 
+        recorder.onEvent = { [weak self] name, type, message, metadata in
+            self?.onEvent?(name, type, message, metadata)
+        }
+
         try recorder.start()
     }
 

@@ -17,6 +17,7 @@ final class IOSAudioRecorder: AudioRecorder {
 
     var onFrame: ((AudioFrame) -> Void)?
     var onAudioFocusChanged: ((Bool) -> Void)?
+    var onEvent: ((SessionEventName, EventType, String, [String: String]) -> Void)?
 
     init(config: RecorderConfig, logger: Logger) {
         self.config = config
@@ -26,10 +27,10 @@ final class IOSAudioRecorder: AudioRecorder {
     func start() throws {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        // .spokenAudio enables AGC and voice processing for clearer, louder mic signal
         try session.setCategory(.playAndRecord, mode: .spokenAudio)
         try session.setPreferredSampleRate(Double(config.sampleRate))
         try session.setActive(true)
+        emitMicInfo(eventName: .micSelected)
         registerObservers()
         #endif
 
@@ -306,12 +307,30 @@ final class IOSAudioRecorder: AudioRecorder {
                 try engine.start()
             }
             logger.info("Recorder", "Audio route changed: new hw=\(newHwFormat.sampleRate)Hz, needsConversion=\(needsConversion)")
+            emitMicInfo(eventName: .micRouteChanged)
         } catch {
             logger.error("Recorder", "Failed to reinstall tap/restart engine after route change", error)
         }
 
         // Notify client recording can resume
         onAudioFocusChanged?(true)
+    }
+
+    private func emitMicInfo(eventName: SessionEventName) {
+        let inputs = AVAudioSession.sharedInstance().currentRoute.inputs
+        guard let port = inputs.first else {
+            onEvent?(eventName, .info, "No active input route", [:])
+            return
+        }
+        let metadata: [String: String] = [
+            "portName": port.portName,
+            "portType": port.portType.rawValue,
+            "portUid": port.uid,
+            "channels": "\(port.channels?.count ?? 0)"
+        ]
+        let message = "Mic: \(port.portName) (\(port.portType.rawValue))"
+        onEvent?(eventName, .info, message, metadata)
+        logger.info("Recorder", "\(eventName.rawValue): \(message)")
     }
     #endif
 }

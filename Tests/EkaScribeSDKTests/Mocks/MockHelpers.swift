@@ -206,6 +206,7 @@ final class MockDataManager: DataManager {
 final class MockAudioRecorder: AudioRecorder {
     var onFrame: ((AudioFrame) -> Void)?
     var onAudioFocusChanged: ((Bool) -> Void)?
+    var onEvent: ((SessionEventName, EventType, String, [String: String]) -> Void)?
     var startCalled = false
     var stopCalled = false
     var pauseCalled = false

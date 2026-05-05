@@ -72,4 +72,6 @@ public enum SessionEventName: String, Sendable {
     case fullAudioUploaded
     case fullAudioUploadFailed
     case sessionCancelled
+    case micSelected
+    case micRouteChanged
 }
