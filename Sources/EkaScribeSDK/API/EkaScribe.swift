@@ -394,7 +394,7 @@ public final class EkaScribe: @unchecked Sendable {
                     version: item.version,
                     patientDetails: item.patientDetails.map {
                         ScribePatientInfo(
-                            age: $0.age,
+                            age: $0.age.flatMap { Int($0) },
                             biologicalSex: $0.biologicalSex,
                             name: $0.name,
                             patientId: $0.patientId,
