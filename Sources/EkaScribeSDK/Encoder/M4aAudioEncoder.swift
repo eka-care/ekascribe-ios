@@ -25,31 +25,23 @@ final class M4aAudioEncoder: AudioEncoder {
         }
     }
 
-    // MARK: - M4A Encoding (CAF → AVAssetExportSession)
+    // MARK: - M4A Encoding (CAF → AVAssetWriter)
 
-    /// Encodes raw PCM Int16 data to M4A using a two-step process:
-    /// 1. Write PCM to a temporary CAF file via AVAudioFile (proper format description)
-    /// 2. Convert CAF → M4A via AVAssetExportSession (software AAC, works on simulator + device)
     private func encodeAsM4A(pcm: [Int16], sampleRate: Int, outputURL: URL) async throws {
-        // Step 1: Write PCM samples to a temporary CAF file
         let cafURL = outputURL.deletingPathExtension().appendingPathExtension("caf")
         try writePCMToCAF(pcm: pcm, sampleRate: sampleRate, cafURL: cafURL)
 
         defer {
-            // Always clean up the intermediate CAF file
             try? FileManager.default.removeItem(at: cafURL)
         }
 
-        // Step 2: Convert CAF → M4A using AVAssetExportSession
         if FileManager.default.fileExists(atPath: outputURL.path) {
             try FileManager.default.removeItem(at: outputURL)
         }
 
-        try await convertCAFToM4A(cafURL: cafURL, m4aURL: outputURL)
+        try await convertCAFToM4A(cafURL: cafURL, m4aURL: outputURL, sampleRate: sampleRate)
     }
 
-    /// Writes raw PCM Int16 samples to a CAF file using AVAudioFile.
-    /// AVAudioFile correctly creates the audio format description needed for AAC conversion.
     private func writePCMToCAF(pcm: [Int16], sampleRate: Int, cafURL: URL) throws {
         if FileManager.default.fileExists(atPath: cafURL.path) {
             try FileManager.default.removeItem(at: cafURL)
@@ -91,37 +83,53 @@ final class M4aAudioEncoder: AudioEncoder {
         logger.info("Encoder", "CAF file written: \(cafURL.lastPathComponent), samples=\(pcm.count)")
     }
 
-    /// Converts a CAF file to M4A using AVAssetExportSession.
-    /// Uses withCheckedThrowingContinuation to avoid blocking (no priority inversion).
-    private func convertCAFToM4A(cafURL: URL, m4aURL: URL) async throws {
+    /// Converts a CAF file to a pure audio-only M4A using AVAssetReader + AVAssetWriter.
+    /// Produces a standard ISO MPEG-4 AAC-LC file with no Apple-specific container metadata.
+    private func convertCAFToM4A(cafURL: URL, m4aURL: URL, sampleRate: Int) async throws {
         let asset = AVURLAsset(url: cafURL)
 
-        guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
-            throw ScribeException(
-                code: .encoderFailed,
-                message: "Failed to create AVAssetExportSession"
-            )
+        let reader = try AVAssetReader(asset: asset)
+        let tracks = try await asset.loadTracks(withMediaType: .audio)
+        guard let audioTrack = tracks.first else {
+            throw ScribeException(code: .encoderFailed, message: "No audio track found in CAF file")
         }
+        let readerOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
+        reader.add(readerOutput)
 
-        exporter.outputFileType = .m4a
-        exporter.outputURL = m4aURL
+        let writer = try AVAssetWriter(outputURL: m4aURL, fileType: .m4a)
+        let audioSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: Double(sampleRate),
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: 32000
+        ]
+        let writerInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+        writerInput.expectsMediaDataInRealTime = false
+        writer.add(writerInput)
+
+        reader.startReading()
+        writer.startWriting()
+        writer.startSession(atSourceTime: .zero)
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            exporter.exportAsynchronously {
-                switch exporter.status {
-                case .completed:
-                    continuation.resume()
-                case .failed, .cancelled:
-                    let error = exporter.error ?? ScribeException(
-                        code: .encoderFailed,
-                        message: "AVAssetExportSession failed with status: \(exporter.status.rawValue)"
-                    )
-                    continuation.resume(throwing: error)
-                default:
-                    continuation.resume(throwing: ScribeException(
-                        code: .encoderFailed,
-                        message: "AVAssetExportSession unexpected status: \(exporter.status.rawValue)"
-                    ))
+            writerInput.requestMediaDataWhenReady(on: DispatchQueue.global(qos: .userInitiated)) {
+                while writerInput.isReadyForMoreMediaData {
+                    if let sampleBuffer = readerOutput.copyNextSampleBuffer() {
+                        writerInput.append(sampleBuffer)
+                    } else {
+                        writerInput.markAsFinished()
+                        writer.finishWriting {
+                            if writer.status == .completed {
+                                continuation.resume()
+                            } else {
+                                continuation.resume(throwing: writer.error ?? ScribeException(
+                                    code: .encoderFailed,
+                                    message: "AVAssetWriter failed with status: \(writer.status.rawValue)"
+                                ))
+                            }
+                        }
+                        return
+                    }
                 }
             }
         }
@@ -160,7 +168,7 @@ final class M4aAudioEncoder: AudioEncoder {
                 try FileManager.default.removeItem(at: outputURL)
             }
 
-            try await convertCAFToM4A(cafURL: cafURL, m4aURL: outputURL)
+            try await convertCAFToM4A(cafURL: cafURL, m4aURL: outputURL, sampleRate: sampleRate)
             let size = try fileSize(atPath: outputPath)
             return EncodedChunk(filePath: outputPath, format: .m4a, sizeBytes: size, durationMs: durationMs)
         } catch {

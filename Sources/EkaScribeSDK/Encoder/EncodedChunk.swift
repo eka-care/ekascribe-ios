@@ -9,11 +9,13 @@ struct EncodedChunk {
     enum AudioFormat {
         case wav
         case m4a
+        case mp3
 
         var fileExtension: String {
             switch self {
             case .wav: return "wav"
             case .m4a: return "m4a"
+            case .mp3: return "mp3"
             }
         }
 
@@ -21,6 +23,7 @@ struct EncodedChunk {
             switch self {
             case .wav: return "audio/wav"
             case .m4a: return "audio/mp4"
+            case .mp3: return "audio/mpeg"
             }
         }
 
@@ -28,6 +31,9 @@ struct EncodedChunk {
             let lower = filePath.lowercased()
             if lower.hasSuffix(".wav") || lower.hasSuffix(".wav_") {
                 return .wav
+            }
+            if lower.hasSuffix(".mp3") || lower.hasSuffix(".mp3_") {
+                return .mp3
             }
             return .m4a
         }

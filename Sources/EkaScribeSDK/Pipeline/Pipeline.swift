@@ -219,7 +219,7 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
             for await chunk in chunkStream {
                 guard !Task.isCancelled else { break }
                 do {
-                    let outputPath = outputDir.appendingPathComponent("\(sessionId)_\(chunk.index + 1).m4a").path
+                    let outputPath = outputDir.appendingPathComponent("\(sessionId)_\(chunk.index + 1).mp3").path
                     let sampleRate = chunk.frames.first?.sampleRate ?? 16_000
                     let encoded = try await encoder.encode(frames: chunk.frames, sampleRate: sampleRate, outputPath: outputPath)
                     self.onEvent?(.chunkEncoded, .success, "Chunk encoded", [
@@ -299,7 +299,7 @@ final class Pipeline: PipelineProtocol, @unchecked Sendable {
             return nil
         }
 
-        let basePath = outputDir.appendingPathComponent("\(sessionId)_full_audio.m4a").path
+        let basePath = outputDir.appendingPathComponent("\(sessionId)_full_audio.mp3").path
         let encoded: EncodedChunk
         do {
             encoded = try await encoder.encodeFromFile(pcmFilePath: rawPcmFilePath, sampleRate: recordedSampleRate, outputPath: basePath)

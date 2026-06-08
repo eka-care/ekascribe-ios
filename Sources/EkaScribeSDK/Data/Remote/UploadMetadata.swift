@@ -7,5 +7,5 @@ struct UploadMetadata {
     let fileName: String
     let folderName: String
     let bid: String
-    var mimeType: String = "audio/mp4"
+    var mimeType: String = "audio/mpeg"
 }

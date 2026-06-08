@@ -61,7 +61,7 @@ public final class EkaScribe: @unchecked Sendable {
             logger: logger
         )
 
-        let encoder = M4aAudioEncoder(logger: logger)
+        let encoder = MP3AudioEncoder(logger: logger)
 
         let downloader = ModelDownloader(filesDir: filesDir, logger: logger)
 
