@@ -205,7 +205,7 @@ public final class EkaScribe: @unchecked Sendable {
             return .failure(error)
         }
 
-        switch await api.getTransactionResult(sessionId) {
+        switch await api.getTransactionResult(sessionId, templateId: nil) {
         case .success(let response, _):
             return .success(SessionManager.mapToSessionResult(sessionId: sessionId, response))
         case .serverError(_, let message, _):
@@ -286,7 +286,7 @@ public final class EkaScribe: @unchecked Sendable {
 
         switch await api.getTemplates() {
         case .success(let response, _):
-            let items = response.data?.templates?.compactMap { dto -> TemplateItem? in
+            let items = response.items?.compactMap { dto -> TemplateItem? in
                 guard let id = dto.id, let title = dto.title else { return nil }
                 return TemplateItem(
                     isDefault: dto.isDefault ?? false,
@@ -394,7 +394,7 @@ public final class EkaScribe: @unchecked Sendable {
                     version: item.version,
                     patientDetails: item.patientDetails.map {
                         ScribePatientInfo(
-                            age: $0.age,
+                            age: $0.age.flatMap { Int($0) },
                             biologicalSex: $0.biologicalSex,
                             name: $0.name,
                             patientId: $0.patientId,

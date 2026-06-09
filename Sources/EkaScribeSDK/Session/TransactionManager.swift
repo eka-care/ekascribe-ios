@@ -119,19 +119,22 @@ final class TransactionManager: TransactionManaging {
         }
     }
 
-    func pollResult(sessionId: String) async -> TransactionPollResult {
+    func pollResult(sessionId: String, templateId: String? = nil) async -> TransactionPollResult {
         let successStates: Set<ResultStatus> = [.success, .partialCompleted]
         let failureStates: Set<ResultStatus> = [.failure]
 
         for _ in 0..<pollMaxRetries {
-            switch await apiService.getTransactionResult(sessionId) {
+            switch await apiService.getTransactionResult(sessionId, templateId: templateId) {
             case .success(let response, let statusCode):
                 if statusCode == 202 {
                     try? await Task.sleep(nanoseconds: UInt64(pollDelayMs) * 1_000_000)
                     continue
                 }
 
-                let statuses = response.data?.output?.compactMap { $0?.status } ?? []
+                let templateResults = response.data?.templateResults
+                let statuses: [ResultStatus] = (templateResults?.transcript?.compactMap { $0?.status } ?? [])
+                    + (templateResults?.custom?.compactMap { $0?.status } ?? [])
+                    + (templateResults?.integration?.compactMap { $0?.status } ?? [])
 
                 if statuses.contains(where: { successStates.contains($0) }) {
                     try? await dataManager.updateUploadStage(sessionId, TransactionStage.completed.rawValue)
@@ -302,7 +305,7 @@ final class TransactionManager: TransactionManaging {
             return result
 
         case .analyzing:
-            switch await pollResult(sessionId: sessionId) {
+            switch await pollResult(sessionId: sessionId, templateId: nil) {
             case .success:
                 try? await dataManager.updateSessionState(sessionId, SessionState.completed.rawValue)
                 return .success()

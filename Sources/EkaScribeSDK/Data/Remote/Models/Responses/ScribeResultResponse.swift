@@ -119,6 +119,7 @@ enum ResultStatus: Decodable {
     case success
     case failure
     case partialCompleted
+    case unknown
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -133,7 +134,7 @@ enum ResultStatus: Decodable {
         case "partial_success", "partial_completed":
             self = .partialCompleted
         default:
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unknown ResultStatus: \(raw)")
+            self = .unknown
         }
     }
 }

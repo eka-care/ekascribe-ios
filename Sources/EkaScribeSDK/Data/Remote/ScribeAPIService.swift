@@ -19,8 +19,8 @@ final class ScribeAPIService: ScribeAPIServiceProtocol {
         await networkClient.execute(ScribeEndpoint.commitTransaction(sessionId: sessionId, body: request))
     }
 
-    func getTransactionResult(_ sessionId: String) async -> NetworkResult<ScribeResultResponse> {
-        await networkClient.execute(ScribeEndpoint.getTransactionResult(sessionId: sessionId))
+    func getTransactionResult(_ sessionId: String, templateId: String? = nil) async -> NetworkResult<ScribeResultResponse> {
+        await networkClient.execute(ScribeEndpoint.getTransactionResult(sessionId: sessionId, templateId: templateId))
     }
 
     func convertTransactionResult(_ sessionId: String, templateId: String) async -> NetworkResult<TemplateConversionResponse> {

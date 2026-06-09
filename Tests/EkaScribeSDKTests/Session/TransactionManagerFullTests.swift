@@ -417,7 +417,7 @@ private final class SequentialMockAPI: ScribeAPIServiceProtocol {
         .success(StopTransactionResponse(message: nil, status: nil, error: nil), statusCode: 200)
     }
 
-    func getTransactionResult(_ sessionId: String) async -> NetworkResult<ScribeResultResponse> {
+    func getTransactionResult(_ sessionId: String, templateId: String? = nil) async -> NetworkResult<ScribeResultResponse> {
         let result = callIndex < results.count ? results[callIndex] : results.last!
         callIndex += 1
         return result

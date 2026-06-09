@@ -65,6 +65,8 @@ public enum SessionEventName: String, Sendable {
     case pollResultSuccess
     case pollResultFailed
     case pollResultTimeout
+    case transcriptReady
+    case outputReady
     case sessionResultReceived
     case recorderSetupFailed
     case fullAudioGenerated

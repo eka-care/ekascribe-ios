@@ -282,7 +282,7 @@ final class MockScribeAPIService: ScribeAPIServiceProtocol {
         return commitResult
     }
 
-    func getTransactionResult(_ sessionId: String) async -> NetworkResult<ScribeResultResponse> {
+    func getTransactionResult(_ sessionId: String, templateId: String? = nil) async -> NetworkResult<ScribeResultResponse> {
         getResultCallCount += 1
         return getResultResult
     }
@@ -351,7 +351,7 @@ final class MockTransactionManager: TransactionManaging {
         return commitResult
     }
 
-    func pollResult(sessionId: String) async -> TransactionPollResult {
+    func pollResult(sessionId: String, templateId: String? = nil) async -> TransactionPollResult {
         pollCallCount += 1
         return pollResult
     }
@@ -429,6 +429,10 @@ final class MockEkaScribeDelegate: EkaScribeDelegate {
     var didStopSessionId: String?
     var didStopChunkCount: Int?
     var didFailError: ScribeError?
+    var didReadyTranscriptSessionId: String?
+    var didReadyTranscriptResult: SessionResult?
+    var didReadyOutputSessionId: String?
+    var didReadyOutputResult: SessionResult?
     var didCompleteSessionId: String?
     var didCompleteResult: SessionResult?
     var didFailSessionId: String?
@@ -451,6 +455,14 @@ final class MockEkaScribeDelegate: EkaScribeDelegate {
     }
     func scribe(_ scribe: EkaScribe, didFailWithError error: ScribeError) {
         didFailError = error
+    }
+    func scribe(_ scribe: EkaScribe, didReadyTranscript sessionId: String, result: SessionResult) {
+        didReadyTranscriptSessionId = sessionId
+        didReadyTranscriptResult = result
+    }
+    func scribe(_ scribe: EkaScribe, didReadyOutput sessionId: String, result: SessionResult) {
+        didReadyOutputSessionId = sessionId
+        didReadyOutputResult = result
     }
     func scribe(_ scribe: EkaScribe, didCompleteSession sessionId: String, result: SessionResult) {
         didCompleteSessionId = sessionId
